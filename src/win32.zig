@@ -140,6 +140,14 @@ pub const CBN_SELCHANGE: u16 = 1;
 // button notifications
 pub const BN_CLICKED: u16 = 0;
 
+// menu flags
+pub const MF_STRING: u32 = 0x00000000;
+pub const MF_POPUP: u32 = 0x00000010;
+
+// messagebox
+pub const MB_OK: u32 = 0x00000000;
+pub const MB_ICONINFORMATION: u32 = 0x00000040;
+
 // sound flags
 pub const SND_MEMORY: u32 = 0x0004;
 pub const SND_ASYNC: u32 = 0x0001;
@@ -189,3 +197,8 @@ pub extern "kernel32" fn GetModuleHandleA(?[*:0]const u8) callconv(.c) ?HINSTANC
 pub extern "gdi32" fn GetStockObject(i32) callconv(.c) ?HBRUSH;
 pub extern "winmm" fn PlaySoundA(?[*]const u8, ?HINSTANCE, u32) callconv(.c) BOOL;
 pub extern "user32" fn RedrawWindow(?HWND, ?*const RECT, ?*anyopaque, u32) callconv(.c) BOOL;
+pub extern "user32" fn CreateMenu() callconv(.c) ?HMENU;
+pub extern "user32" fn CreatePopupMenu() callconv(.c) ?HMENU;
+pub extern "user32" fn AppendMenuA(HMENU, u32, usize, ?[*:0]const u8) callconv(.c) BOOL;
+pub extern "user32" fn SetMenu(HWND, ?HMENU) callconv(.c) BOOL;
+pub extern "user32" fn MessageBoxA(?HWND, [*:0]const u8, [*:0]const u8, u32) callconv(.c) i32;

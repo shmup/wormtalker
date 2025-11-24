@@ -17,6 +17,10 @@ const MAX_BUTTONS: usize = 128;
 // control IDs
 const ID_COMBOBOX: usize = 1000;
 
+// menu IDs
+const IDM_ABOUT: usize = 2001;
+const IDM_EXIT: usize = 2002;
+
 // globals for window state
 var g_buttons: [MAX_BUTTONS]?win32.HWND = [_]?win32.HWND{null} ** MAX_BUTTONS;
 var g_num_buttons: usize = 0;
@@ -30,6 +34,7 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
     switch (msg) {
         win32.WM_CREATE => {
             g_main_hwnd = hwnd;
+            createMenuBar(hwnd);
             createCombobox(hwnd);
             createButtonsForBank(hwnd, 0);
             return 0;
@@ -47,6 +52,16 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
         win32.WM_COMMAND => {
             const notification = @as(u16, @truncate(wParam >> 16));
             const control_id = @as(u16, @truncate(wParam));
+            // menu commands (notification == 0 for menus)
+            if (notification == 0) {
+                if (control_id == IDM_EXIT) {
+                    win32.PostQuitMessage(0);
+                    return 0;
+                } else if (control_id == IDM_ABOUT) {
+                    _ = win32.MessageBoxA(hwnd, "wormboard\n\nsoundboard for worms armageddon", "about wormboard", win32.MB_OK | win32.MB_ICONINFORMATION);
+                    return 0;
+                }
+            }
             if (control_id == ID_COMBOBOX and notification == win32.CBN_SELCHANGE) {
                 handleBankChange(hwnd);
             } else if (notification == win32.BN_CLICKED and control_id < MAX_BUTTONS) {
@@ -70,6 +85,21 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
             return 0;
         },
         else => return win32.DefWindowProcA(hwnd, msg, wParam, lParam),
+    }
+}
+
+fn createMenuBar(hwnd: win32.HWND) void {
+    const menu_bar = win32.CreateMenu();
+    const help_menu = win32.CreatePopupMenu();
+
+    if (help_menu) |help| {
+        _ = win32.AppendMenuA(help, win32.MF_STRING, IDM_ABOUT, "&About");
+        _ = win32.AppendMenuA(help, win32.MF_STRING, IDM_EXIT, "E&xit");
+    }
+
+    if (menu_bar) |bar| {
+        _ = win32.AppendMenuA(bar, win32.MF_POPUP, @intFromPtr(help_menu), "&Help");
+        _ = win32.SetMenu(hwnd, bar);
     }
 }
 
