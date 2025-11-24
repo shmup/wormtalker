@@ -104,12 +104,18 @@ pub const CW_USEDEFAULT: i32 = @bitCast(@as(u32, 0x80000000));
 // window messages
 pub const WM_DESTROY: u32 = 0x0002;
 pub const WM_SIZE: u32 = 0x0005;
+pub const WM_SETREDRAW: u32 = 0x000B;
 pub const WM_PAINT: u32 = 0x000F;
 pub const WM_COMMAND: u32 = 0x0111;
 pub const WM_VSCROLL: u32 = 0x0115;
 pub const WM_MOUSEWHEEL: u32 = 0x020A;
 pub const WM_CREATE: u32 = 0x0001;
 pub const WM_GETMINMAXINFO: u32 = 0x0024;
+
+// RedrawWindow flags
+pub const RDW_INVALIDATE: u32 = 0x0001;
+pub const RDW_ERASE: u32 = 0x0004;
+pub const RDW_ALLCHILDREN: u32 = 0x0080;
 
 // scroll bar
 pub const SB_VERT: i32 = 1;
@@ -182,3 +188,4 @@ pub extern "user32" fn InvalidateRect(?HWND, ?*const RECT, BOOL) callconv(.c) BO
 pub extern "kernel32" fn GetModuleHandleA(?[*:0]const u8) callconv(.c) ?HINSTANCE;
 pub extern "gdi32" fn GetStockObject(i32) callconv(.c) ?HBRUSH;
 pub extern "winmm" fn PlaySoundA(?[*]const u8, ?HINSTANCE, u32) callconv(.c) BOOL;
+pub extern "user32" fn RedrawWindow(?HWND, ?*const RECT, ?*anyopaque, u32) callconv(.c) BOOL;

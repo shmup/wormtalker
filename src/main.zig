@@ -232,11 +232,17 @@ fn handleBankChange(hwnd: win32.HWND) void {
     if (g_combobox) |combo| {
         const sel = win32.SendMessageA(combo, win32.CB_GETCURSEL, 0, 0);
         if (sel >= 0 and @as(usize, @intCast(sel)) < sound_banks.sound_banks.len) {
+            // freeze painting
+            _ = win32.SendMessageA(hwnd, win32.WM_SETREDRAW, 0, 0);
+
             g_current_bank = @intCast(sel);
             g_scroll_pos = 0;
             createButtonsForBank(hwnd, g_current_bank);
             layoutControls(hwnd);
-            _ = win32.InvalidateRect(hwnd, null, 1);
+
+            // resume painting and force redraw
+            _ = win32.SendMessageA(hwnd, win32.WM_SETREDRAW, 1, 0);
+            _ = win32.RedrawWindow(hwnd, null, null, win32.RDW_ERASE | win32.RDW_INVALIDATE | win32.RDW_ALLCHILDREN);
         }
     }
 }
