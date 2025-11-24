@@ -117,7 +117,8 @@ fn generateSoundBanksFile(allocator: std.mem.Allocator) !void {
 
         try writer.print("const {s}_wavs = [_]WavFile{{\n", .{ident});
         for (bank.wavs) |wav| {
-            const base = wavBaseName(wav);
+            var base_buf: [128]u8 = undefined;
+            const base = wavBaseName(wav, &base_buf);
             try writer.print("    .{{ .name = \"{s}\", .data = @embedFile(\"wavs/Speech-Banks/{s}/{s}\") }},\n", .{ base, bank.name, wav });
         }
         try writer.writeAll("};\n\n");
@@ -158,9 +159,15 @@ fn sanitizeIdent(name: []const u8, buf: []u8) []const u8 {
     return buf[0..i];
 }
 
-fn wavBaseName(filename: []const u8) []const u8 {
-    if (std.mem.endsWith(u8, filename, ".WAV") or std.mem.endsWith(u8, filename, ".wav")) {
-        return filename[0 .. filename.len - 4];
+fn wavBaseName(filename: []const u8, buf: []u8) []const u8 {
+    const name = if (std.mem.endsWith(u8, filename, ".WAV") or std.mem.endsWith(u8, filename, ".wav"))
+        filename[0 .. filename.len - 4]
+    else
+        filename;
+    // lowercase the name
+    for (name, 0..) |c, i| {
+        if (i >= buf.len) break;
+        buf[i] = std.ascii.toLower(c);
     }
-    return filename;
+    return buf[0..@min(name.len, buf.len)];
 }
