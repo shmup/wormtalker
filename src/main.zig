@@ -27,9 +27,9 @@ const ID_BROWSE: usize = 3001;
 
 // timer IDs
 const TIMER_BUTTON_RELEASE: usize = 4001;
-const TIMER_BANK_CHANGE: usize = 4002;
+const TIMER_NAV_REPEAT: usize = 4002;
 const FLASH_DURATION_MS: u32 = 100;
-const BANK_CHANGE_DELAY_MS: u32 = 50;
+const NAV_REPEAT_MS: u32 = 50; // our own key repeat rate
 
 // navigation
 const BANKS_PER_PAGE: i32 = 13;
@@ -149,9 +149,9 @@ var g_current_bank: usize = 0;
 var g_scroll_pos: i32 = 0;
 var g_content_height: i32 = 0;
 var g_main_hwnd: ?win32.HWND = null;
-var g_held_key: ?u32 = null; // tracks key held down to ignore repeats
+var g_held_key: ?u32 = null; // tracks sound key held down to ignore repeats
+var g_held_nav_key: ?u32 = null; // tracks nav key held (for our own repeat timer)
 var g_pending_button: ?u16 = null; // tracks button pressed while dropdown was closing
-var g_pending_bank: ?usize = null; // tracks pending bank change (debounced)
 var g_prng: std.Random.DefaultPrng = undefined;
 var g_flash_button: ?u16 = null; // button being flashed after bank change
 
@@ -179,44 +179,42 @@ fn releaseHeldKey() void {
     }
 }
 
-// schedule a bank change (debounced)
-fn scheduleBankChange(hwnd: win32.HWND, target: usize) void {
-    g_pending_bank = target;
+// apply nav key action (called on first press and by repeat timer)
+fn applyNavKey(hwnd: win32.HWND, vk: u32) void {
+    const num_banks = getBankCount();
+    if (num_banks == 0) return;
 
-    // update combobox immediately for visual feedback
-    if (g_combobox) |combo| {
-        _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, @intCast(target), 0);
-    }
+    const base: i32 = @intCast(g_current_bank);
+    const num: i32 = @intCast(num_banks);
 
-    // start/restart timer - actual change happens when timer fires
-    _ = win32.SetTimer(hwnd, TIMER_BANK_CHANGE, BANK_CHANGE_DELAY_MS, null);
+    var target: i32 = switch (vk) {
+        win32.VK_UP => base - 1,
+        win32.VK_DOWN => base + 1,
+        win32.VK_PRIOR => base - BANKS_PER_PAGE,
+        win32.VK_NEXT => base + BANKS_PER_PAGE,
+        win32.VK_HOME => 0,
+        win32.VK_END => num - 1,
+        else => base,
+    };
+
+    // wrap around
+    target = @mod(target, num);
+
+    applyBankChange(hwnd, @intCast(target));
 }
 
 // handle WM_KEYDOWN - returns true if handled
 fn handleKeyDown(hwnd: win32.HWND, vk: u32) bool {
     switch (vk) {
         win32.VK_UP, win32.VK_DOWN, win32.VK_PRIOR, win32.VK_NEXT, win32.VK_HOME, win32.VK_END => {
-            const num_banks = getBankCount();
-            if (num_banks == 0) return true;
+            // ignore if already holding a nav key (we handle repeat ourselves)
+            if (g_held_nav_key != null) return true;
 
-            // calculate target from pending bank (if any) or current
-            const base: i32 = @intCast(g_pending_bank orelse g_current_bank);
-            const num: i32 = @intCast(num_banks);
+            g_held_nav_key = vk;
+            applyNavKey(hwnd, vk);
 
-            var target: i32 = switch (vk) {
-                win32.VK_UP => base - 1,
-                win32.VK_DOWN => base + 1,
-                win32.VK_PRIOR => base - BANKS_PER_PAGE,
-                win32.VK_NEXT => base + BANKS_PER_PAGE,
-                win32.VK_HOME => 0,
-                win32.VK_END => num - 1,
-                else => base,
-            };
-
-            // wrap around
-            target = @mod(target, num);
-
-            scheduleBankChange(hwnd, @intCast(target));
+            // start our own repeat timer
+            _ = win32.SetTimer(hwnd, TIMER_NAV_REPEAT, NAV_REPEAT_MS, null);
         },
         else => {
             // alphanumeric keys - show button pressed (ignore key repeat)
@@ -234,7 +232,15 @@ fn handleKeyDown(hwnd: win32.HWND, vk: u32) bool {
 }
 
 // handle WM_KEYUP - returns true if handled
-fn handleKeyUp(vk: u32) bool {
+fn handleKeyUp(hwnd: win32.HWND, vk: u32) bool {
+    // nav key release - stop repeat timer
+    if (g_held_nav_key == vk) {
+        g_held_nav_key = null;
+        _ = win32.KillTimer(hwnd, TIMER_NAV_REPEAT);
+        return true;
+    }
+
+    // sound key release - play sound
     if (g_held_key == vk) {
         if (keyToSoundIndex(vk)) |index| {
             setButtonState(index, false);
@@ -346,6 +352,11 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
         },
         win32.WM_KILLFOCUS => {
             releaseHeldKey();
+            // stop nav repeat
+            if (g_held_nav_key != null) {
+                g_held_nav_key = null;
+                _ = win32.KillTimer(hwnd, TIMER_NAV_REPEAT);
+            }
             // also release pending button from dropdown
             if (g_pending_button) |btn_index| {
                 _ = win32.ReleaseCapture();
@@ -361,7 +372,7 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
         },
         win32.WM_KEYUP => {
             const vk: u32 = @truncate(wParam);
-            if (handleKeyUp(vk)) return 0;
+            if (handleKeyUp(hwnd, vk)) return 0;
             return win32.DefWindowProcA(hwnd, msg, wParam, lParam);
         },
         win32.WM_TIMER => {
@@ -371,12 +382,12 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                     setButtonState(btn_index, false);
                     g_flash_button = null;
                 }
-            } else if (wParam == TIMER_BANK_CHANGE) {
-                _ = win32.KillTimer(hwnd, TIMER_BANK_CHANGE);
-                if (g_pending_bank) |target| {
-                    g_pending_bank = null;
-                    // do the actual bank change now
-                    applyBankChange(hwnd, target);
+            } else if (wParam == TIMER_NAV_REPEAT) {
+                // repeat nav key while held
+                if (g_held_nav_key) |vk| {
+                    applyNavKey(hwnd, vk);
+                } else {
+                    _ = win32.KillTimer(hwnd, TIMER_NAV_REPEAT);
                 }
             }
             return 0;
