@@ -1,7 +1,7 @@
 # use bash for cross-platform compatibility
 set shell := ["bash", "-c"]
 
-exe := if os() == "windows" { "zig-out/bin/wormboard.exe" } else { "wine zig-out/bin/wormboard.exe" }
+exe := if os() == "windows" { "zig-out/bin/wormtalker.exe" } else { "wine zig-out/bin/wormtalker.exe" }
 
 build:
     zig build

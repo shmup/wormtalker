@@ -287,7 +287,7 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                     win32.PostQuitMessage(0);
                     return 0;
                 } else if (control_id == IDM_ABOUT) {
-                    _ = win32.MessageBoxA(hwnd, "wormboard\n\nsoundboard for worms armageddon", "about wormboard", win32.MB_OK | win32.MB_ICONINFORMATION);
+                    _ = win32.MessageBoxA(hwnd, "wormtalker\n\nsoundboard for worms armageddon", "about wormtalker", win32.MB_OK | win32.MB_ICONINFORMATION);
                     return 0;
                 }
             }
@@ -855,7 +855,7 @@ pub fn main() void {
     const hwnd = win32.CreateWindowExA(
         0,
         "WormboardClass",
-        "wormboard",
+        "wormtalker",
         win32.WS_OVERLAPPEDWINDOW | win32.WS_VISIBLE | win32.WS_VSCROLL | win32.WS_CLIPCHILDREN,
         win32.CW_USEDEFAULT,
         win32.CW_USEDEFAULT,
