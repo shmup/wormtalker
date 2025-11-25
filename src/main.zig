@@ -27,7 +27,9 @@ const ID_BROWSE: usize = 3001;
 
 // timer IDs
 const TIMER_BUTTON_RELEASE: usize = 4001;
+const TIMER_BANK_CHANGE: usize = 4002;
 const FLASH_DURATION_MS: u32 = 100;
+const BANK_CHANGE_DELAY_MS: u32 = 50;
 
 // navigation
 const BANKS_PER_PAGE: i32 = 13;
@@ -113,29 +115,30 @@ fn playWav(bank_index: usize, wav_index: usize) void {
     }
 }
 
-fn changeBankByDelta(hwnd: win32.HWND, delta: i32) void {
-    const num_banks: i32 = @intCast(getBankCount());
-    if (num_banks == 0) return;
-
-    var new_bank: i32 = @as(i32, @intCast(g_current_bank)) + delta;
-    // wrap around
-    if (new_bank < 0) new_bank = num_banks - 1;
-    if (new_bank >= num_banks) new_bank = 0;
-
-    if (g_combobox) |combo| {
-        _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, @intCast(new_bank), 0);
-    }
-    handleBankChangeWithSound(hwnd);
-}
-
-fn changeBankToIndex(hwnd: win32.HWND, index: usize) void {
+// apply a bank change immediately (called from debounce timer)
+fn applyBankChange(hwnd: win32.HWND, target: usize) void {
     const num_banks = getBankCount();
-    if (num_banks == 0 or index >= num_banks) return;
+    if (num_banks == 0 or target >= num_banks) return;
 
+    // ensure combobox shows correct selection (might have drifted)
     if (g_combobox) |combo| {
-        _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, @intCast(index), 0);
+        _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, @intCast(target), 0);
     }
-    handleBankChangeWithSound(hwnd);
+
+    // freeze painting
+    _ = win32.SendMessageA(hwnd, win32.WM_SETREDRAW, 0, 0);
+
+    g_current_bank = target;
+    g_scroll_pos = 0;
+    createButtonsForBank(hwnd, g_current_bank);
+    layoutControls(hwnd);
+
+    // resume painting and force redraw
+    _ = win32.SendMessageA(hwnd, win32.WM_SETREDRAW, 1, 0);
+    _ = win32.RedrawWindow(hwnd, null, null, win32.RDW_ERASE | win32.RDW_INVALIDATE | win32.RDW_ALLCHILDREN);
+
+    // play random sound from new bank
+    playRandomSound();
 }
 
 // globals for window state
@@ -148,6 +151,7 @@ var g_content_height: i32 = 0;
 var g_main_hwnd: ?win32.HWND = null;
 var g_held_key: ?u32 = null; // tracks key held down to ignore repeats
 var g_pending_button: ?u16 = null; // tracks button pressed while dropdown was closing
+var g_pending_bank: ?usize = null; // tracks pending bank change (debounced)
 var g_prng: std.Random.DefaultPrng = undefined;
 var g_flash_button: ?u16 = null; // button being flashed after bank change
 
@@ -175,17 +179,44 @@ fn releaseHeldKey() void {
     }
 }
 
+// schedule a bank change (debounced)
+fn scheduleBankChange(hwnd: win32.HWND, target: usize) void {
+    g_pending_bank = target;
+
+    // update combobox immediately for visual feedback
+    if (g_combobox) |combo| {
+        _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, @intCast(target), 0);
+    }
+
+    // start/restart timer - actual change happens when timer fires
+    _ = win32.SetTimer(hwnd, TIMER_BANK_CHANGE, BANK_CHANGE_DELAY_MS, null);
+}
+
 // handle WM_KEYDOWN - returns true if handled
 fn handleKeyDown(hwnd: win32.HWND, vk: u32) bool {
     switch (vk) {
-        win32.VK_UP => changeBankByDelta(hwnd, -1),
-        win32.VK_DOWN => changeBankByDelta(hwnd, 1),
-        win32.VK_PRIOR => changeBankByDelta(hwnd, -BANKS_PER_PAGE),
-        win32.VK_NEXT => changeBankByDelta(hwnd, BANKS_PER_PAGE),
-        win32.VK_HOME => changeBankToIndex(hwnd, 0),
-        win32.VK_END => {
+        win32.VK_UP, win32.VK_DOWN, win32.VK_PRIOR, win32.VK_NEXT, win32.VK_HOME, win32.VK_END => {
             const num_banks = getBankCount();
-            if (num_banks > 0) changeBankToIndex(hwnd, num_banks - 1);
+            if (num_banks == 0) return true;
+
+            // calculate target from pending bank (if any) or current
+            const base: i32 = @intCast(g_pending_bank orelse g_current_bank);
+            const num: i32 = @intCast(num_banks);
+
+            var target: i32 = switch (vk) {
+                win32.VK_UP => base - 1,
+                win32.VK_DOWN => base + 1,
+                win32.VK_PRIOR => base - BANKS_PER_PAGE,
+                win32.VK_NEXT => base + BANKS_PER_PAGE,
+                win32.VK_HOME => 0,
+                win32.VK_END => num - 1,
+                else => base,
+            };
+
+            // wrap around
+            target = @mod(target, num);
+
+            scheduleBankChange(hwnd, @intCast(target));
         },
         else => {
             // alphanumeric keys - show button pressed (ignore key repeat)
@@ -339,6 +370,13 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                 if (g_flash_button) |btn_index| {
                     setButtonState(btn_index, false);
                     g_flash_button = null;
+                }
+            } else if (wParam == TIMER_BANK_CHANGE) {
+                _ = win32.KillTimer(hwnd, TIMER_BANK_CHANGE);
+                if (g_pending_bank) |target| {
+                    g_pending_bank = null;
+                    // do the actual bank change now
+                    applyBankChange(hwnd, target);
                 }
             }
             return 0;
