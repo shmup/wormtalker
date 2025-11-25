@@ -178,6 +178,42 @@ pub const SND_FILENAME: u32 = 0x00020000;
 // color
 pub const COLOR_BTNFACE: usize = 15;
 
+// drawing
+pub const DRAWITEMSTRUCT = extern struct {
+    CtlType: u32,
+    CtlID: u32,
+    itemID: u32,
+    itemAction: u32,
+    itemState: u32,
+    hwndItem: HWND,
+    hDC: HDC,
+    rcItem: RECT,
+    itemData: usize,
+};
+
+pub const ODS_SELECTED: u32 = 0x0001;
+pub const ODS_FOCUS: u32 = 0x0010;
+pub const WM_DRAWITEM: u32 = 0x002B;
+pub const BS_OWNERDRAW: u32 = 0x0000000B;
+pub const DT_CENTER: u32 = 0x00000001;
+pub const DT_VCENTER: u32 = 0x00000004;
+pub const DT_SINGLELINE: u32 = 0x00000020;
+
+pub extern "gdi32" fn SetBkColor(hdc: HDC, color: u32) callconv(.c) u32;
+pub extern "gdi32" fn SetTextColor(hdc: HDC, color: u32) callconv(.c) u32;
+pub extern "gdi32" fn CreateSolidBrush(color: u32) callconv(.c) ?HBRUSH;
+pub extern "gdi32" fn DeleteObject(ho: ?*anyopaque) callconv(.c) BOOL;
+pub extern "gdi32" fn FillRect(hdc: HDC, lprc: *const RECT, hbr: HBRUSH) callconv(.c) i32;
+pub extern "gdi32" fn SelectObject(hdc: HDC, h: ?*anyopaque) callconv(.c) ?*anyopaque;
+pub extern "user32" fn DrawTextA(hdc: HDC, lpchText: [*:0]const u8, cchText: i32, lprc: *RECT, format: u32) callconv(.c) i32;
+pub extern "user32" fn GetWindowTextA(hwnd: HWND, lpString: [*]u8, nMaxCount: i32) callconv(.c) i32;
+pub extern "user32" fn DrawEdge(hdc: HDC, qrc: *RECT, edge: u32, grfFlags: u32) callconv(.c) BOOL;
+
+pub const EDGE_RAISED: u32 = 0x0005;
+pub const EDGE_SUNKEN: u32 = 0x000A;
+pub const BF_RECT: u32 = 0x000F;
+pub const BF_ADJUST: u32 = 0x2000;
+
 // cursor
 pub const IDC_ARROW: usize = 32512;
 

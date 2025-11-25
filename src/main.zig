@@ -319,6 +319,11 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
             }
             return 0;
         },
+        win32.WM_DRAWITEM => {
+            const dis: *win32.DRAWITEMSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
+            drawButton(dis);
+            return 1;
+        },
         win32.WM_DESTROY => {
             win32.PostQuitMessage(0);
             return 0;
@@ -394,7 +399,7 @@ fn createButtonsForBank(hwnd: win32.HWND, bank_index: usize) void {
             0,
             "BUTTON",
             &name_buf,
-            win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_PUSHBUTTON,
+            win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_OWNERDRAW,
             0,
             0,
             100,
@@ -494,6 +499,50 @@ fn scrollContent(hwnd: win32.HWND, delta: i32) void {
         g_scroll_pos = new_pos;
         _ = win32.ScrollWindow(hwnd, 0, scroll_delta, null, null);
         layoutControls(hwnd);
+    }
+}
+
+// colors (BGR format)
+const COLOR_NORMAL: u32 = 0x00F0F0F0; // light gray (default button)
+const COLOR_PRESSED: u32 = 0x00CFCFFF; // pale pink (RGB: 0xFFCFCF)
+const COLOR_TEXT: u32 = 0x00000000; // black
+
+fn drawButton(dis: *win32.DRAWITEMSTRUCT) void {
+    const is_pressed = (dis.itemState & win32.ODS_SELECTED) != 0;
+
+    // pick background color
+    const bg_color = if (is_pressed) COLOR_PRESSED else COLOR_NORMAL;
+    const brush = win32.CreateSolidBrush(bg_color);
+    defer _ = win32.DeleteObject(@ptrCast(brush));
+
+    // fill background
+    if (brush) |b| {
+        _ = win32.FillRect(dis.hDC, &dis.rcItem, b);
+    }
+
+    // draw 3d edge
+    var edge_rect = dis.rcItem;
+    const edge = if (is_pressed) win32.EDGE_SUNKEN else win32.EDGE_RAISED;
+    _ = win32.DrawEdge(dis.hDC, &edge_rect, edge, win32.BF_RECT);
+
+    // get button text
+    var text_buf: [64:0]u8 = undefined;
+    const text_len = win32.GetWindowTextA(dis.hwndItem, &text_buf, 64);
+    if (text_len > 0) {
+        text_buf[@intCast(text_len)] = 0;
+
+        // setup text drawing
+        _ = win32.SetBkColor(dis.hDC, bg_color);
+        _ = win32.SetTextColor(dis.hDC, COLOR_TEXT);
+
+        // offset text when pressed
+        var text_rect = dis.rcItem;
+        if (is_pressed) {
+            text_rect.left += 1;
+            text_rect.top += 1;
+        }
+
+        _ = win32.DrawTextA(dis.hDC, &text_buf, text_len, &text_rect, win32.DT_CENTER | win32.DT_VCENTER | win32.DT_SINGLELINE);
     }
 }
 
