@@ -99,6 +99,7 @@ pub const WS_CHILD: u32 = 0x40000000;
 pub const WS_VSCROLL: u32 = 0x00200000;
 pub const WS_CLIPCHILDREN: u32 = 0x02000000;
 pub const BS_PUSHBUTTON: u32 = 0x00000000;
+pub const SS_CENTER: u32 = 0x00000001;
 pub const CW_USEDEFAULT: i32 = @bitCast(@as(u32, 0x80000000));
 
 // window messages
@@ -172,6 +173,7 @@ pub const VK_DOWN: u32 = 0x28;
 pub const SND_MEMORY: u32 = 0x0004;
 pub const SND_ASYNC: u32 = 0x0001;
 pub const SND_NOSTOP: u32 = 0x0010;
+pub const SND_FILENAME: u32 = 0x00020000;
 
 // color
 pub const COLOR_BTNFACE: usize = 15;
@@ -231,3 +233,58 @@ pub extern "user32" fn ChildWindowFromPoint(HWND, POINT) callconv(.c) ?HWND;
 pub extern "user32" fn GetDlgCtrlID(HWND) callconv(.c) i32;
 pub extern "user32" fn SetCapture(HWND) callconv(.c) ?HWND;
 pub extern "user32" fn ReleaseCapture() callconv(.c) BOOL;
+
+// registry types and constants
+pub const HKEY = *opaque {};
+pub const LSTATUS = i32;
+pub const REGSAM = u32;
+
+pub const HKEY_CURRENT_USER: HKEY = @ptrFromInt(0x80000001);
+pub const KEY_READ: REGSAM = 0x20019;
+pub const REG_SZ: u32 = 1;
+pub const ERROR_SUCCESS: LSTATUS = 0;
+
+// registry functions
+pub extern "advapi32" fn RegOpenKeyExA(
+    hKey: HKEY,
+    lpSubKey: [*:0]const u8,
+    ulOptions: u32,
+    samDesired: REGSAM,
+    phkResult: *HKEY,
+) callconv(.c) LSTATUS;
+
+pub extern "advapi32" fn RegQueryValueExA(
+    hKey: HKEY,
+    lpValueName: [*:0]const u8,
+    lpReserved: ?*u32,
+    lpType: ?*u32,
+    lpData: ?[*]u8,
+    lpcbData: ?*u32,
+) callconv(.c) LSTATUS;
+
+pub extern "advapi32" fn RegCloseKey(hKey: HKEY) callconv(.c) LSTATUS;
+
+// shell types for folder browser
+pub const LPITEMIDLIST = ?*anyopaque;
+pub const MAX_PATH: usize = 260;
+
+pub const BROWSEINFOA = extern struct {
+    hwndOwner: ?HWND = null,
+    pidlRoot: LPITEMIDLIST = null,
+    pszDisplayName: ?[*]u8 = null,
+    lpszTitle: ?[*:0]const u8 = null,
+    ulFlags: u32 = 0,
+    lpfn: ?*anyopaque = null,
+    lParam: LPARAM = 0,
+    iImage: i32 = 0,
+};
+
+// browse flags
+pub const BIF_RETURNONLYFSDIRS: u32 = 0x00000001;
+pub const BIF_NEWDIALOGSTYLE: u32 = 0x00000040;
+
+// shell functions
+pub extern "shell32" fn SHBrowseForFolderA(*BROWSEINFOA) callconv(.c) LPITEMIDLIST;
+pub extern "shell32" fn SHGetPathFromIDListA(LPITEMIDLIST, [*]u8) callconv(.c) BOOL;
+pub extern "ole32" fn CoTaskMemFree(?*anyopaque) callconv(.c) void;
+pub extern "ole32" fn CoInitialize(?*anyopaque) callconv(.c) i32;

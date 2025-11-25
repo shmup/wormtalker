@@ -1,6 +1,7 @@
 const std = @import("std");
 const win32 = @import("win32.zig");
 const sound_banks = @import("sound_banks.zig");
+const scanner = @import("scanner.zig");
 
 // layout constants
 const BUTTON_HEIGHT: i32 = 25;
@@ -21,6 +22,15 @@ const ID_COMBOBOX: usize = 1000;
 const IDM_ABOUT: usize = 2001;
 const IDM_EXIT: usize = 2002;
 
+// browse button ID
+const ID_BROWSE: usize = 3001;
+
+// UI state
+const UIState = enum {
+    normal,
+    browse_needed,
+};
+
 // keyboard mapping: 1-9, 0, then QWERTY order
 // virtual key codes: '0'-'9' = 0x30-0x39, 'A'-'Z' = 0x41-0x5A
 const QWERTY_KEYS = "QWERTYUIOPASDFGHJKLZXCVBNM";
@@ -37,8 +47,70 @@ fn keyToSoundIndex(vk: u32) ?u16 {
     return null;
 }
 
+// unified bank access functions (work for both embedded and runtime modes)
+fn getBankCount() usize {
+    if (sound_banks.runtime_mode) {
+        if (g_runtime_banks) |banks| return banks.banks.len;
+        return 0;
+    }
+    return sound_banks.sound_banks.len;
+}
+
+fn getBankName(index: usize) [:0]const u8 {
+    if (sound_banks.runtime_mode) {
+        if (g_runtime_banks) |banks| {
+            if (index < banks.banks.len) return banks.banks[index].name;
+        }
+        return "";
+    }
+    return sound_banks.sound_banks[index].name;
+}
+
+fn getWavCount(bank_index: usize) usize {
+    if (sound_banks.runtime_mode) {
+        if (g_runtime_banks) |banks| {
+            if (bank_index < banks.banks.len) return banks.banks[bank_index].wavs.len;
+        }
+        return 0;
+    }
+    return sound_banks.sound_banks[bank_index].wavs.len;
+}
+
+fn getWavName(bank_index: usize, wav_index: usize) []const u8 {
+    if (sound_banks.runtime_mode) {
+        if (g_runtime_banks) |banks| {
+            if (bank_index < banks.banks.len) {
+                const bank = banks.banks[bank_index];
+                if (wav_index < bank.wavs.len) return bank.wavs[wav_index].name;
+            }
+        }
+        return "";
+    }
+    return sound_banks.sound_banks[bank_index].wavs[wav_index].name;
+}
+
+fn playWav(bank_index: usize, wav_index: usize) void {
+    if (sound_banks.runtime_mode) {
+        if (g_runtime_banks) |banks| {
+            if (bank_index < banks.banks.len) {
+                const bank = banks.banks[bank_index];
+                if (wav_index < bank.wavs.len) {
+                    const wav = bank.wavs[wav_index];
+                    _ = win32.PlaySoundA(wav.path.ptr, null, win32.SND_FILENAME | win32.SND_ASYNC);
+                }
+            }
+        }
+    } else {
+        const bank = sound_banks.sound_banks[bank_index];
+        if (wav_index < bank.wavs.len) {
+            const wav = bank.wavs[wav_index];
+            _ = win32.PlaySoundA(wav.data.ptr, null, win32.SND_MEMORY | win32.SND_ASYNC);
+        }
+    }
+}
+
 fn changeBankByDelta(hwnd: win32.HWND, delta: i32) void {
-    const num_banks: i32 = @intCast(sound_banks.sound_banks.len);
+    const num_banks: i32 = @intCast(getBankCount());
     if (num_banks == 0) return;
 
     var new_bank: i32 = @as(i32, @intCast(g_current_bank)) + delta;
@@ -63,13 +135,24 @@ var g_main_hwnd: ?win32.HWND = null;
 var g_held_key: ?u32 = null; // tracks key held down to ignore repeats
 var g_pending_button: ?u16 = null; // tracks button pressed while dropdown was closing
 
+// runtime mode state
+var g_ui_state: UIState = .normal;
+var g_runtime_banks: ?scanner.ScanResult = null;
+var g_browse_button: ?win32.HWND = null;
+var g_browse_label: ?win32.HWND = null;
+var g_allocator: std.mem.Allocator = std.heap.page_allocator;
+
 fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(.c) win32.LRESULT {
     switch (msg) {
         win32.WM_CREATE => {
             g_main_hwnd = hwnd;
             createMenuBar(hwnd);
-            createCombobox(hwnd);
-            createButtonsForBank(hwnd, 0);
+            if (g_ui_state == .browse_needed) {
+                createBrowseUI(hwnd);
+            } else {
+                createCombobox(hwnd);
+                createButtonsForBank(hwnd, 0);
+            }
             // hide focus rectangles on buttons
             _ = win32.SendMessageA(hwnd, win32.WM_UPDATEUISTATE, (win32.UISF_HIDEFOCUS << 16) | win32.UIS_SET, 0);
             return 0;
@@ -97,7 +180,10 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                     return 0;
                 }
             }
-            if (control_id == ID_COMBOBOX and notification == win32.CBN_SELCHANGE) {
+            if (control_id == ID_BROWSE and notification == win32.BN_CLICKED) {
+                handleBrowseClick(hwnd);
+                return 0;
+            } else if (control_id == ID_COMBOBOX and notification == win32.CBN_SELCHANGE) {
                 handleBankChange(hwnd);
             } else if (control_id == ID_COMBOBOX and notification == win32.CBN_CLOSEUP) {
                 // check if mouse is over a button - show it pressed, wait for release
@@ -256,8 +342,10 @@ fn createCombobox(hwnd: win32.HWND) void {
     );
 
     if (g_combobox) |combo| {
-        for (sound_banks.sound_banks) |bank| {
-            _ = win32.SendMessageA(combo, win32.CB_ADDSTRING, 0, @bitCast(@intFromPtr(bank.name.ptr)));
+        const bank_count = getBankCount();
+        for (0..bank_count) |i| {
+            const name = getBankName(i);
+            _ = win32.SendMessageA(combo, win32.CB_ADDSTRING, 0, @bitCast(@intFromPtr(name.ptr)));
         }
         _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, 0, 0);
     }
@@ -274,13 +362,14 @@ fn createButtonsForBank(hwnd: win32.HWND, bank_index: usize) void {
     }
     g_buttons = [_]?win32.HWND{null} ** MAX_BUTTONS;
 
-    const bank = sound_banks.sound_banks[bank_index];
-    g_num_buttons = @min(bank.wavs.len, MAX_BUTTONS);
+    const wav_count = getWavCount(bank_index);
+    g_num_buttons = @min(wav_count, MAX_BUTTONS);
 
-    for (bank.wavs[0..g_num_buttons], 0..) |wav, i| {
+    for (0..g_num_buttons) |i| {
+        const wav_name = getWavName(bank_index, i);
         var name_buf: [64:0]u8 = undefined;
-        const name_len = @min(wav.name.len, 63);
-        @memcpy(name_buf[0..name_len], wav.name[0..name_len]);
+        const name_len = @min(wav_name.len, 63);
+        @memcpy(name_buf[0..name_len], wav_name[0..name_len]);
         name_buf[name_len] = 0;
 
         g_buttons[i] = win32.CreateWindowExA(
@@ -301,21 +390,26 @@ fn createButtonsForBank(hwnd: win32.HWND, bank_index: usize) void {
 }
 
 fn layoutControls(hwnd: win32.HWND) void {
+    // handle browse UI layout
+    if (g_ui_state == .browse_needed) {
+        layoutBrowseUI(hwnd);
+        return;
+    }
+
     var rect: win32.RECT = undefined;
     _ = win32.GetClientRect(hwnd, &rect);
     const client_width = rect.right - rect.left;
     const client_height = rect.bottom - rect.top;
     const button_area_height = client_height - TOOLBAR_HEIGHT;
 
-    const bank = sound_banks.sound_banks[g_current_bank];
-
     // layout buttons in rows
     var x: i32 = BUTTON_PADDING;
     var y: i32 = TOOLBAR_HEIGHT + BUTTON_PADDING - g_scroll_pos;
     const row_height: i32 = BUTTON_HEIGHT + BUTTON_PADDING;
 
-    for (bank.wavs[0..g_num_buttons], 0..) |wav, i| {
-        const text_width = @as(i32, @intCast(wav.name.len)) * BUTTON_CHAR_WIDTH + 16;
+    for (0..g_num_buttons) |i| {
+        const wav_name = getWavName(g_current_bank, i);
+        const text_width = @as(i32, @intCast(wav_name.len)) * BUTTON_CHAR_WIDTH + 16;
         const btn_width = @max(text_width, MIN_BUTTON_WIDTH);
 
         if (x + btn_width + BUTTON_PADDING > client_width and x > BUTTON_PADDING) {
@@ -386,10 +480,8 @@ fn scrollContent(hwnd: win32.HWND, delta: i32) void {
 }
 
 fn playSound(index: u16) void {
-    const bank = sound_banks.sound_banks[g_current_bank];
-    if (index < bank.wavs.len) {
-        const wav = bank.wavs[index];
-        _ = win32.PlaySoundA(wav.data.ptr, null, win32.SND_MEMORY | win32.SND_ASYNC);
+    if (index < getWavCount(g_current_bank)) {
+        playWav(g_current_bank, index);
         // return focus to main window so keyboard shortcuts work
         _ = win32.SetFocus(g_main_hwnd);
     }
@@ -398,7 +490,7 @@ fn playSound(index: u16) void {
 fn handleBankChange(hwnd: win32.HWND) void {
     if (g_combobox) |combo| {
         const sel = win32.SendMessageA(combo, win32.CB_GETCURSEL, 0, 0);
-        if (sel >= 0 and @as(usize, @intCast(sel)) < sound_banks.sound_banks.len) {
+        if (sel >= 0 and @as(usize, @intCast(sel)) < getBankCount()) {
             // freeze painting
             _ = win32.SendMessageA(hwnd, win32.WM_SETREDRAW, 0, 0);
 
@@ -414,7 +506,130 @@ fn handleBankChange(hwnd: win32.HWND) void {
     }
 }
 
+// browse UI functions (shown when worms installation not found)
+fn createBrowseUI(hwnd: win32.HWND) void {
+    const hinstance = win32.GetModuleHandleA(null);
+
+    // create label
+    g_browse_label = win32.CreateWindowExA(
+        0,
+        "STATIC",
+        "worms armageddon installation not found",
+        win32.WS_CHILD | win32.WS_VISIBLE | win32.SS_CENTER,
+        0,
+        0,
+        300,
+        20,
+        hwnd,
+        null,
+        hinstance,
+        null,
+    );
+
+    // create browse button
+    g_browse_button = win32.CreateWindowExA(
+        0,
+        "BUTTON",
+        "Browse...",
+        win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_PUSHBUTTON,
+        0,
+        0,
+        100,
+        30,
+        hwnd,
+        @ptrFromInt(ID_BROWSE),
+        hinstance,
+        null,
+    );
+}
+
+fn layoutBrowseUI(hwnd: win32.HWND) void {
+    var rect: win32.RECT = undefined;
+    _ = win32.GetClientRect(hwnd, &rect);
+    const client_width = rect.right - rect.left;
+    const client_height = rect.bottom - rect.top;
+
+    const label_width: i32 = 300;
+    const label_height: i32 = 20;
+    const button_width: i32 = 100;
+    const button_height: i32 = 30;
+    const spacing: i32 = 10;
+
+    const total_height = label_height + spacing + button_height;
+    const start_y = @divTrunc(client_height - total_height, 2);
+
+    if (g_browse_label) |label| {
+        const label_x = @divTrunc(client_width - label_width, 2);
+        _ = win32.MoveWindow(label, label_x, start_y, label_width, label_height, 1);
+    }
+
+    if (g_browse_button) |btn| {
+        const btn_x = @divTrunc(client_width - button_width, 2);
+        const btn_y = start_y + label_height + spacing;
+        _ = win32.MoveWindow(btn, btn_x, btn_y, button_width, button_height, 1);
+    }
+}
+
+fn handleBrowseClick(hwnd: win32.HWND) void {
+    var path_buf: [win32.MAX_PATH]u8 = undefined;
+    if (scanner.browseForFolder(hwnd, &path_buf)) |path| {
+        // try to scan the selected directory
+        if (scanner.scanSpeechDirectory(g_allocator, path)) |result| {
+            g_runtime_banks = result;
+            transitionToNormalUI(hwnd);
+        } else |_| {
+            _ = win32.MessageBoxA(
+                hwnd,
+                "Could not find DATA\\User\\Speech in the selected folder.\n\nPlease select your Worms Armageddon installation directory.",
+                "Invalid folder",
+                win32.MB_OK | win32.MB_ICONINFORMATION,
+            );
+        }
+    }
+}
+
+fn transitionToNormalUI(hwnd: win32.HWND) void {
+    // destroy browse UI
+    if (g_browse_label) |label| {
+        _ = win32.DestroyWindow(label);
+        g_browse_label = null;
+    }
+    if (g_browse_button) |btn| {
+        _ = win32.DestroyWindow(btn);
+        g_browse_button = null;
+    }
+
+    // switch to normal UI
+    g_ui_state = .normal;
+    createCombobox(hwnd);
+    createButtonsForBank(hwnd, 0);
+    layoutControls(hwnd);
+    _ = win32.RedrawWindow(hwnd, null, null, win32.RDW_ERASE | win32.RDW_INVALIDATE | win32.RDW_ALLCHILDREN);
+}
+
+// runtime initialization (called before window creation)
+fn initRuntime() void {
+    if (!sound_banks.runtime_mode) return;
+
+    // try to read worms path from registry
+    var path_buf: [win32.MAX_PATH]u8 = undefined;
+    if (scanner.getWormsPath(&path_buf)) |path| {
+        // try to scan the speech directory
+        if (scanner.scanSpeechDirectory(g_allocator, path)) |result| {
+            g_runtime_banks = result;
+            g_ui_state = .normal;
+            return;
+        } else |_| {}
+    }
+
+    // no path found or scan failed - show browse UI
+    g_ui_state = .browse_needed;
+}
+
 pub fn main() void {
+    // initialize runtime mode (check registry, scan speech directory)
+    initRuntime();
+
     const hinstance = win32.GetModuleHandleA(null);
 
     const wc = win32.WNDCLASSEXA{
