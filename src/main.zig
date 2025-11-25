@@ -310,6 +310,10 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
             if (control_id == ID_BROWSE and notification == win32.BN_CLICKED) {
                 handleBrowseClick(hwnd);
                 return 0;
+            } else if (control_id == ID_AUTO_PREVIEW and notification == win32.BN_CLICKED) {
+                // return focus to main window so keyboard shortcuts work
+                _ = win32.SetFocus(hwnd);
+                return 0;
             } else if (control_id == ID_COMBOBOX and notification == win32.CBN_SELCHANGE) {
                 handleBankChange(hwnd);
             } else if (control_id == ID_COMBOBOX and notification == win32.CBN_CLOSEUP) {
