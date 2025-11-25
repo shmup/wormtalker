@@ -25,6 +25,9 @@ const IDM_EXIT: usize = 2002;
 // browse button ID
 const ID_BROWSE: usize = 3001;
 
+// timer IDs
+const TIMER_BUTTON_RELEASE: usize = 4001;
+
 // UI state
 const UIState = enum {
     normal,
@@ -121,7 +124,7 @@ fn changeBankByDelta(hwnd: win32.HWND, delta: i32) void {
     if (g_combobox) |combo| {
         _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, @intCast(new_bank), 0);
     }
-    handleBankChange(hwnd);
+    handleBankChangeWithSound(hwnd);
 }
 
 // globals for window state
@@ -134,6 +137,8 @@ var g_content_height: i32 = 0;
 var g_main_hwnd: ?win32.HWND = null;
 var g_held_key: ?u32 = null; // tracks key held down to ignore repeats
 var g_pending_button: ?u16 = null; // tracks button pressed while dropdown was closing
+var g_prng: std.Random.DefaultPrng = undefined;
+var g_flash_button: ?u16 = null; // button being flashed after bank change
 
 // runtime mode state
 var g_ui_state: UIState = .normal;
@@ -301,6 +306,18 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                 return 0;
             }
             return win32.DefWindowProcA(hwnd, msg, wParam, lParam);
+        },
+        win32.WM_TIMER => {
+            if (wParam == TIMER_BUTTON_RELEASE) {
+                _ = win32.KillTimer(hwnd, TIMER_BUTTON_RELEASE);
+                if (g_flash_button) |btn_index| {
+                    if (g_buttons[btn_index]) |btn| {
+                        _ = win32.SendMessageA(btn, win32.BM_SETSTATE, 0, 0);
+                    }
+                    g_flash_button = null;
+                }
+            }
+            return 0;
         },
         win32.WM_DESTROY => {
             win32.PostQuitMessage(0);
@@ -488,7 +505,32 @@ fn playSound(index: u16) void {
     }
 }
 
+fn playRandomSound() void {
+    const wav_count = getWavCount(g_current_bank);
+    if (wav_count == 0) return;
+
+    const random_index: u16 = @intCast(g_prng.random().uintLessThan(usize, wav_count));
+
+    // show button pressed briefly
+    if (g_buttons[random_index]) |btn| {
+        _ = win32.SendMessageA(btn, win32.BM_SETSTATE, 1, 0);
+        // set timer to release button after 100ms
+        _ = win32.SetTimer(g_main_hwnd, TIMER_BUTTON_RELEASE, 100, null);
+        g_flash_button = random_index;
+    }
+
+    playSound(random_index);
+}
+
 fn handleBankChange(hwnd: win32.HWND) void {
+    handleBankChangeInternal(hwnd, false);
+}
+
+fn handleBankChangeWithSound(hwnd: win32.HWND) void {
+    handleBankChangeInternal(hwnd, true);
+}
+
+fn handleBankChangeInternal(hwnd: win32.HWND, play_random: bool) void {
     if (g_combobox) |combo| {
         const sel = win32.SendMessageA(combo, win32.CB_GETCURSEL, 0, 0);
         if (sel >= 0 and @as(usize, @intCast(sel)) < getBankCount()) {
@@ -503,6 +545,11 @@ fn handleBankChange(hwnd: win32.HWND) void {
             // resume painting and force redraw
             _ = win32.SendMessageA(hwnd, win32.WM_SETREDRAW, 1, 0);
             _ = win32.RedrawWindow(hwnd, null, null, win32.RDW_ERASE | win32.RDW_INVALIDATE | win32.RDW_ALLCHILDREN);
+
+            // play random sound from new bank
+            if (play_random) {
+                playRandomSound();
+            }
         }
     }
 }
@@ -659,6 +706,10 @@ fn initRuntime(force_browse: bool) void {
 }
 
 pub fn main() void {
+    // seed prng with timestamp
+    const seed: u64 = @bitCast(std.time.milliTimestamp());
+    g_prng = std.Random.DefaultPrng.init(seed);
+
     // parse command line args
     const force_browse = parseArgs();
 
