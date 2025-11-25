@@ -127,6 +127,16 @@ fn changeBankByDelta(hwnd: win32.HWND, delta: i32) void {
     handleBankChangeWithSound(hwnd);
 }
 
+fn changeBankToIndex(hwnd: win32.HWND, index: usize) void {
+    const num_banks = getBankCount();
+    if (num_banks == 0 or index >= num_banks) return;
+
+    if (g_combobox) |combo| {
+        _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, @intCast(index), 0);
+    }
+    handleBankChangeWithSound(hwnd);
+}
+
 // globals for window state
 var g_buttons: [MAX_BUTTONS]?win32.HWND = [_]?win32.HWND{null} ** MAX_BUTTONS;
 var g_num_buttons: usize = 0;
@@ -278,6 +288,19 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                 return 0;
             } else if (vk == win32.VK_DOWN) {
                 changeBankByDelta(hwnd, 1);
+                return 0;
+            } else if (vk == win32.VK_PRIOR) { // page up
+                changeBankByDelta(hwnd, -13);
+                return 0;
+            } else if (vk == win32.VK_NEXT) { // page down
+                changeBankByDelta(hwnd, 13);
+                return 0;
+            } else if (vk == win32.VK_HOME) {
+                changeBankToIndex(hwnd, 0);
+                return 0;
+            } else if (vk == win32.VK_END) {
+                const num_banks = getBankCount();
+                if (num_banks > 0) changeBankToIndex(hwnd, num_banks - 1);
                 return 0;
             }
             // alphanumeric keys - show button pressed (ignore key repeat)

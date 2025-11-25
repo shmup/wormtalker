@@ -166,6 +166,10 @@ pub const UISF_HIDEFOCUS: u32 = 0x1;
 
 // timer
 pub const WM_TIMER: u32 = 0x0113;
+pub const VK_PRIOR: u32 = 0x21; // page up
+pub const VK_NEXT: u32 = 0x22; // page down
+pub const VK_END: u32 = 0x23;
+pub const VK_HOME: u32 = 0x24;
 pub const VK_UP: u32 = 0x26;
 pub const VK_DOWN: u32 = 0x28;
 
