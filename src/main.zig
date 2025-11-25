@@ -515,7 +515,7 @@ fn createBrowseUI(hwnd: win32.HWND) void {
     g_browse_label = win32.CreateWindowExA(
         0,
         "STATIC",
-        "worms armageddon installation not found",
+        "please browse to your worms armagedon installation folder",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.SS_CENTER,
         0,
         0,
@@ -531,7 +531,7 @@ fn createBrowseUI(hwnd: win32.HWND) void {
     g_browse_button = win32.CreateWindowExA(
         0,
         "BUTTON",
-        "Browse...",
+        "browse...",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_PUSHBUTTON,
         0,
         0,
@@ -550,8 +550,8 @@ fn layoutBrowseUI(hwnd: win32.HWND) void {
     const client_width = rect.right - rect.left;
     const client_height = rect.bottom - rect.top;
 
-    const label_width: i32 = 300;
-    const label_height: i32 = 20;
+    const label_width: i32 = 400;
+    const label_height: i32 = 30;
     const button_width: i32 = 100;
     const button_height: i32 = 30;
     const spacing: i32 = 10;
