@@ -29,7 +29,8 @@ const ID_BROWSE: usize = 3001;
 const TIMER_BUTTON_RELEASE: usize = 4001;
 const TIMER_NAV_REPEAT: usize = 4002;
 const FLASH_DURATION_MS: u32 = 100;
-const NAV_REPEAT_MS: u32 = 50; // our own key repeat rate
+const NAV_INITIAL_DELAY_MS: u32 = 300; // delay before repeat starts
+const NAV_REPEAT_MS: u32 = 50; // fast repeat rate after initial delay
 
 // navigation
 const BANKS_PER_PAGE: i32 = 13;
@@ -151,6 +152,7 @@ var g_content_height: i32 = 0;
 var g_main_hwnd: ?win32.HWND = null;
 var g_held_key: ?u32 = null; // tracks sound key held down to ignore repeats
 var g_held_nav_key: ?u32 = null; // tracks nav key held (for our own repeat timer)
+var g_nav_repeat_started: bool = false; // true after initial delay, now repeating fast
 var g_pending_button: ?u16 = null; // tracks button pressed while dropdown was closing
 var g_prng: std.Random.DefaultPrng = undefined;
 var g_flash_button: ?u16 = null; // button being flashed after bank change
@@ -211,10 +213,11 @@ fn handleKeyDown(hwnd: win32.HWND, vk: u32) bool {
             if (g_held_nav_key != null) return true;
 
             g_held_nav_key = vk;
+            g_nav_repeat_started = false;
             applyNavKey(hwnd, vk);
 
-            // start our own repeat timer
-            _ = win32.SetTimer(hwnd, TIMER_NAV_REPEAT, NAV_REPEAT_MS, null);
+            // start timer with initial delay (longer before repeat kicks in)
+            _ = win32.SetTimer(hwnd, TIMER_NAV_REPEAT, NAV_INITIAL_DELAY_MS, null);
         },
         else => {
             // alphanumeric keys - show button pressed (ignore key repeat)
@@ -236,6 +239,7 @@ fn handleKeyUp(hwnd: win32.HWND, vk: u32) bool {
     // nav key release - stop repeat timer
     if (g_held_nav_key == vk) {
         g_held_nav_key = null;
+        g_nav_repeat_started = false;
         _ = win32.KillTimer(hwnd, TIMER_NAV_REPEAT);
         return true;
     }
@@ -355,6 +359,7 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
             // stop nav repeat
             if (g_held_nav_key != null) {
                 g_held_nav_key = null;
+                g_nav_repeat_started = false;
                 _ = win32.KillTimer(hwnd, TIMER_NAV_REPEAT);
             }
             // also release pending button from dropdown
@@ -386,6 +391,11 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                 // repeat nav key while held
                 if (g_held_nav_key) |vk| {
                     applyNavKey(hwnd, vk);
+                    // after initial delay, switch to fast repeat
+                    if (!g_nav_repeat_started) {
+                        g_nav_repeat_started = true;
+                        _ = win32.SetTimer(hwnd, TIMER_NAV_REPEAT, NAV_REPEAT_MS, null);
+                    }
                 } else {
                     _ = win32.KillTimer(hwnd, TIMER_NAV_REPEAT);
                 }
