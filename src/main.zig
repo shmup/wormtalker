@@ -847,6 +847,8 @@ fn handleBrowseClick(hwnd: win32.HWND) void {
         // try to scan the selected/found directory
         if (scanner.scanSpeechDirectory(g_allocator, worms_root)) |result| {
             g_runtime_banks = result;
+            // save for next time
+            scanner.saveBrowsedPath(worms_root);
             transitionToNormalUI(hwnd);
         } else |_| {
             _ = win32.MessageBoxA(
@@ -899,10 +901,19 @@ fn initRuntime(force_browse: bool) void {
         return;
     }
 
-    // try to read worms path from registry
     var path_buf: [win32.MAX_PATH]u8 = undefined;
+
+    // try saved path first (from previous browse)
+    if (scanner.getSavedPath(&path_buf)) |path| {
+        if (scanner.scanSpeechDirectory(g_allocator, path)) |result| {
+            g_runtime_banks = result;
+            g_ui_state = .normal;
+            return;
+        } else |_| {}
+    }
+
+    // fall back to worms registry key
     if (scanner.getWormsPath(&path_buf)) |path| {
-        // try to scan the speech directory
         if (scanner.scanSpeechDirectory(g_allocator, path)) |result| {
             g_runtime_banks = result;
             g_ui_state = .normal;

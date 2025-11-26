@@ -290,6 +290,8 @@ pub const REGSAM = u32;
 
 pub const HKEY_CURRENT_USER: HKEY = @ptrFromInt(0x80000001);
 pub const KEY_READ: REGSAM = 0x20019;
+pub const KEY_WRITE: REGSAM = 0x20006;
+pub const KEY_ALL_ACCESS: REGSAM = 0xF003F;
 pub const REG_SZ: u32 = 1;
 pub const ERROR_SUCCESS: LSTATUS = 0;
 
@@ -312,6 +314,27 @@ pub extern "advapi32" fn RegQueryValueExA(
 ) callconv(.c) LSTATUS;
 
 pub extern "advapi32" fn RegCloseKey(hKey: HKEY) callconv(.c) LSTATUS;
+
+pub extern "advapi32" fn RegCreateKeyExA(
+    hKey: HKEY,
+    lpSubKey: [*:0]const u8,
+    Reserved: u32,
+    lpClass: ?[*:0]const u8,
+    dwOptions: u32,
+    samDesired: REGSAM,
+    lpSecurityAttributes: ?*anyopaque,
+    phkResult: *HKEY,
+    lpdwDisposition: ?*u32,
+) callconv(.c) LSTATUS;
+
+pub extern "advapi32" fn RegSetValueExA(
+    hKey: HKEY,
+    lpValueName: [*:0]const u8,
+    Reserved: u32,
+    dwType: u32,
+    lpData: [*]const u8,
+    cbData: u32,
+) callconv(.c) LSTATUS;
 
 // shell types for folder browser
 pub const LPITEMIDLIST = ?*anyopaque;

@@ -40,6 +40,69 @@ pub const ScanResult = struct {
     }
 };
 
+const WORMTALKER_REG_KEY = "Software\\wormtalker";
+
+// save browsed path to registry
+pub fn saveBrowsedPath(path: []const u8) void {
+    var key: win32.HKEY = undefined;
+    const status = win32.RegCreateKeyExA(
+        win32.HKEY_CURRENT_USER,
+        WORMTALKER_REG_KEY,
+        0,
+        null,
+        0,
+        win32.KEY_WRITE,
+        null,
+        &key,
+        null,
+    );
+
+    if (status != win32.ERROR_SUCCESS) return;
+    defer _ = win32.RegCloseKey(key);
+
+    // include null terminator in size
+    _ = win32.RegSetValueExA(
+        key,
+        "Path",
+        0,
+        win32.REG_SZ,
+        path.ptr,
+        @intCast(path.len + 1),
+    );
+}
+
+// try to read saved path from our registry key
+pub fn getSavedPath(buf: []u8) ?[]const u8 {
+    var key: win32.HKEY = undefined;
+    const status = win32.RegOpenKeyExA(
+        win32.HKEY_CURRENT_USER,
+        WORMTALKER_REG_KEY,
+        0,
+        win32.KEY_READ,
+        &key,
+    );
+
+    if (status != win32.ERROR_SUCCESS) return null;
+    defer _ = win32.RegCloseKey(key);
+
+    var data_type: u32 = 0;
+    var data_size: u32 = @intCast(buf.len);
+
+    const query_status = win32.RegQueryValueExA(
+        key,
+        "Path",
+        null,
+        &data_type,
+        buf.ptr,
+        &data_size,
+    );
+
+    if (query_status != win32.ERROR_SUCCESS or data_type != win32.REG_SZ) return null;
+
+    const len = if (data_size > 0) data_size - 1 else 0;
+    return buf[0..len];
+}
+
 // try to read worms installation path from registry
 pub fn getWormsPath(buf: []u8) ?[]const u8 {
     var key: win32.HKEY = undefined;
