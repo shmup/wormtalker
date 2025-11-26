@@ -302,7 +302,8 @@ pub fn scanSpeechDirectory(allocator: std.mem.Allocator, base_path: []const u8) 
 
 // show folder browser dialog
 pub fn browseForFolder(hwnd: ?win32.HWND, buf: []u8) ?[]const u8 {
-    _ = win32.CoInitialize(null);
+    const hr = win32.CoInitialize(null);
+    if (hr < 0) return null; // COM init failed
 
     var bi = win32.BROWSEINFOA{
         .hwndOwner = hwnd,
