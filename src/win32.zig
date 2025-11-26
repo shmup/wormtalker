@@ -161,6 +161,20 @@ pub const MF_POPUP: u32 = 0x00000010;
 pub const MF_DISABLED: u32 = 0x00000002;
 pub const MF_GRAYED: u32 = 0x00000001;
 pub const MF_RIGHTJUSTIFY: u32 = 0x00004000;
+pub const MF_OWNERDRAW: u32 = 0x00000100;
+
+// owner-drawn menu structs
+pub const MEASUREITEMSTRUCT = extern struct {
+    CtlType: u32,
+    CtlID: u32,
+    itemID: u32,
+    itemWidth: u32,
+    itemHeight: u32,
+    itemData: usize,
+};
+
+pub const ODT_MENU: u32 = 1;
+pub const WM_MEASUREITEM: u32 = 0x002C;
 
 // static control color
 pub const WM_CTLCOLORSTATIC: u32 = 0x0138;
@@ -207,7 +221,7 @@ pub const DRAWITEMSTRUCT = extern struct {
     itemID: u32,
     itemAction: u32,
     itemState: u32,
-    hwndItem: HWND,
+    hwndItem: ?*anyopaque, // HWND for controls, HMENU for menus
     hDC: HDC,
     rcItem: RECT,
     itemData: usize,
@@ -300,6 +314,10 @@ pub extern "user32" fn SetCapture(HWND) callconv(.c) ?HWND;
 pub extern "user32" fn ReleaseCapture() callconv(.c) BOOL;
 pub extern "user32" fn LoadIconA(?HINSTANCE, usize) callconv(.c) ?HICON;
 pub extern "user32" fn LoadImageA(?HINSTANCE, usize, u32, i32, i32, u32) callconv(.c) ?*anyopaque;
+pub extern "user32" fn GetSystemMetrics(nIndex: i32) callconv(.c) i32;
+
+// system metrics
+pub const SM_CYMENU: i32 = 15;
 
 // icon resource id
 pub const IDI_APP: usize = 1;

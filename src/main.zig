@@ -11,7 +11,7 @@ const BUTTON_PADDING: i32 = 2;
 const BUTTON_CHAR_WIDTH: i32 = 7;
 const MIN_BUTTON_WIDTH: i32 = 40;
 const MIN_WINDOW_WIDTH: i32 = 600;
-const MIN_WINDOW_HEIGHT: i32 = 450;
+const MIN_WINDOW_HEIGHT: i32 = 360;
 const TOOLBAR_PADDING: i32 = 8; // vertical padding above/below toolbar controls
 const TOOLBAR_CTRL_HEIGHT: i32 = 23; // match combobox edit height
 const TOOLBAR_HEIGHT: i32 = TOOLBAR_CTRL_HEIGHT + 2 * TOOLBAR_PADDING;
@@ -463,8 +463,28 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
             }
             return 1;
         },
+        win32.WM_MEASUREITEM => {
+            const mis: *win32.MEASUREITEMSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
+            if (mis.CtlType == win32.ODT_MENU) {
+                // measure title menu item
+                mis.itemWidth = 160; // approximate width for "wormtalker v1.2 by shmup"
+                mis.itemHeight = @intCast(win32.GetSystemMetrics(win32.SM_CYMENU));
+                return 1;
+            }
+            return win32.DefWindowProcA(hwnd, msg, wParam, lParam);
+        },
         win32.WM_DRAWITEM => {
             const dis: *win32.DRAWITEMSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
+            if (dis.CtlType == win32.ODT_MENU) {
+                // draw title menu item - just text, no highlight
+                _ = win32.SetBkMode(dis.hDC, win32.TRANSPARENT);
+                _ = win32.SetTextColor(dis.hDC, COLOR_TEXT);
+                const title = "wormtalker v1.2 by shmup";
+                var text_rect = dis.rcItem;
+                text_rect.left += 6; // padding
+                _ = win32.DrawTextA(dis.hDC, title, @intCast(title.len), &text_rect, win32.DT_VCENTER | win32.DT_SINGLELINE);
+                return 1;
+            }
             drawButton(dis);
             return 1;
         },
@@ -506,12 +526,12 @@ fn createMenuBar(hwnd: win32.HWND) void {
     }
 
     if (menu_bar) |bar| {
-        // title text on the left (disabled so it doesn't act as a button)
-        _ = win32.AppendMenuA(bar, win32.MF_STRING | win32.MF_DISABLED, 0, "wormtalker v1.2 by shmup");
-        // help menu
-        _ = win32.AppendMenuA(bar, win32.MF_POPUP, @intFromPtr(help_menu), "&Help");
+        // title text on the left (owner-drawn so it's truly non-interactive)
+        _ = win32.AppendMenuA(bar, win32.MF_OWNERDRAW | win32.MF_DISABLED, 0, "wormtalker v1.2 by shmup");
+        // help menu (right-justified, left of X)
+        _ = win32.AppendMenuA(bar, win32.MF_POPUP | win32.MF_RIGHTJUSTIFY, @intFromPtr(help_menu), "&Help");
         // close button on the right
-        _ = win32.AppendMenuA(bar, win32.MF_STRING | win32.MF_RIGHTJUSTIFY, IDM_CLOSE, "X");
+        _ = win32.AppendMenuA(bar, win32.MF_STRING, IDM_CLOSE, "X");
         _ = win32.SetMenu(hwnd, bar);
     }
 }
@@ -779,7 +799,8 @@ fn drawButton(dis: *win32.DRAWITEMSTRUCT) void {
 
     // get button text
     var text_buf: [64:0]u8 = undefined;
-    const text_len = win32.GetWindowTextA(dis.hwndItem, &text_buf, 64);
+    const hwnd_item: win32.HWND = @ptrCast(dis.hwndItem);
+    const text_len = win32.GetWindowTextA(hwnd_item, &text_buf, 64);
     if (text_len > 0) {
         text_buf[@intCast(text_len)] = 0;
 
