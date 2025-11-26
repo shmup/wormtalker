@@ -832,6 +832,10 @@ fn layoutControls(hwnd: win32.HWND) void {
 
     g_content_height = g_cached_content_height;
 
+    // clamp scroll position in case content shrunk on resize
+    const max_scroll = @max(0, g_content_height - button_area_height);
+    g_scroll_pos = @min(g_scroll_pos, max_scroll);
+
     var si = win32.SCROLLINFO{
         .fMask = win32.SIF_ALL,
         .nMin = 0,
@@ -1089,6 +1093,10 @@ fn handleBrowseClick(hwnd: win32.HWND) void {
 
         // try to scan the selected/found directory
         if (scanner.scanSpeechDirectory(g_allocator, worms_root)) |result| {
+            // free old banks before setting new ones (avoid memory leak on re-browse)
+            if (g_runtime_banks) |*old_banks| {
+                old_banks.deinit();
+            }
             g_runtime_banks = result;
             // save for next time
             scanner.saveBrowsedPath(worms_root);
