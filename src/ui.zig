@@ -116,37 +116,46 @@ pub fn createToolbar(
         null,
     );
 
-    const combobox_x = random_x + RANDOM_BUTTON_WIDTH + TOOLBAR_ITEM_SPACING;
-    combobox_out.* = win32.CreateWindowExA(
-        0,
-        "COMBOBOX",
-        "",
-        win32.WS_CHILD | win32.WS_VISIBLE | win32.CBS_DROPDOWNLIST | win32.CBS_HASSTRINGS,
-        combobox_x,
-        TOOLBAR_PADDING,
-        COMBOBOX_WIDTH,
-        COMBOBOX_HEIGHT,
-        hwnd,
-        @ptrFromInt(ID_COMBOBOX),
-        hinstance,
-        null,
-    );
+    // only show combobox if we have multiple banks
+    var checkbox_x = random_x + RANDOM_BUTTON_WIDTH + TOOLBAR_ITEM_SPACING;
 
-    if (combobox_out.*) |combo| {
-        for (0..bank_count) |i| {
-            const name = getBankName(i);
-            _ = win32.SendMessageA(combo, win32.CB_ADDSTRING, 0, @bitCast(@intFromPtr(name.ptr)));
+    if (bank_count > 1) {
+        const combobox_x = checkbox_x;
+        combobox_out.* = win32.CreateWindowExA(
+            0,
+            "COMBOBOX",
+            "",
+            win32.WS_CHILD | win32.WS_VISIBLE | win32.CBS_DROPDOWNLIST | win32.CBS_HASSTRINGS,
+            combobox_x,
+            TOOLBAR_PADDING,
+            COMBOBOX_WIDTH,
+            COMBOBOX_HEIGHT,
+            hwnd,
+            @ptrFromInt(ID_COMBOBOX),
+            hinstance,
+            null,
+        );
+
+        if (combobox_out.*) |combo| {
+            for (0..bank_count) |i| {
+                const name = getBankName(i);
+                _ = win32.SendMessageA(combo, win32.CB_ADDSTRING, 0, @bitCast(@intFromPtr(name.ptr)));
+            }
+            _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, 0, 0);
         }
-        _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, 0, 0);
+
+        checkbox_x = combobox_x + COMBOBOX_WIDTH + TOOLBAR_ITEM_SPACING;
+    } else {
+        combobox_out.* = null;
     }
 
-    // create auto-preview checkbox to the right of combobox
+    // create auto-preview checkbox
     checkbox_out.* = win32.CreateWindowExA(
         0,
         "BUTTON",
         "auto-preview",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_AUTOCHECKBOX,
-        combobox_x + COMBOBOX_WIDTH + TOOLBAR_ITEM_SPACING,
+        checkbox_x,
         TOOLBAR_PADDING + 3,
         CHECKBOX_WIDTH,
         CHECKBOX_HEIGHT,
