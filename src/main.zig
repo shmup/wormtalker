@@ -538,12 +538,12 @@ fn createCombobox(hwnd: win32.HWND) void {
 
     const random_x = BUTTON_PADDING + ICON_SIZE + BUTTON_PADDING;
 
-    // create random button (after icon)
+    // create random button (after icon) - owner-drawn to avoid focus rectangle
     g_random_button = win32.CreateWindowExA(
         0,
         "BUTTON",
         "random",
-        win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_PUSHBUTTON,
+        win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_OWNERDRAW,
         random_x,
         BUTTON_PADDING,
         RANDOM_BUTTON_WIDTH,
