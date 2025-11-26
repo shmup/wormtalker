@@ -16,6 +16,8 @@ const TOOLBAR_HEIGHT: i32 = 30;
 const COMBOBOX_WIDTH: i32 = 150;
 const COMBOBOX_HEIGHT: i32 = 250;
 const RANDOM_BUTTON_WIDTH: i32 = 55;
+const TOOLBAR_CTRL_HEIGHT: i32 = 23; // match combobox edit height
+const ICON_SIZE: i32 = 22; // fill toolbar height
 const MAX_BUTTONS: usize = 128;
 
 // control IDs
@@ -189,6 +191,7 @@ var g_browse_button: ?win32.HWND = null;
 var g_browse_label: ?win32.HWND = null;
 var g_allocator: std.mem.Allocator = std.heap.page_allocator;
 var g_toolbar_brush: ?win32.HBRUSH = null;
+var g_icon_ctrl: ?win32.HWND = null;
 
 // }}}
 
@@ -447,6 +450,17 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
             }
             return 0;
         },
+        win32.WM_ERASEBKGND => {
+            const hdc: win32.HDC = @ptrFromInt(@as(usize, @truncate(wParam)));
+            var rect: win32.RECT = undefined;
+            _ = win32.GetClientRect(hwnd, &rect);
+
+            // paint entire window with yellow
+            if (g_toolbar_brush) |brush| {
+                _ = win32.FillRect(hdc, &rect, brush);
+            }
+            return 1;
+        },
         win32.WM_DRAWITEM => {
             const dis: *win32.DRAWITEMSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
             drawButton(dis);
@@ -492,38 +506,55 @@ fn createMenuBar(hwnd: win32.HWND) void {
     if (menu_bar) |bar| {
         _ = win32.AppendMenuA(bar, win32.MF_POPUP, @intFromPtr(help_menu), "&Help");
         _ = win32.SetMenu(hwnd, bar);
-
-        // set menu bar background color
-        if (g_toolbar_brush) |brush| {
-            var mi = win32.MENUINFO{
-                .fMask = win32.MIM_BACKGROUND,
-                .hbrBack = brush,
-            };
-            _ = win32.SetMenuInfo(bar, &mi);
-        }
     }
 }
 
 fn createCombobox(hwnd: win32.HWND) void {
     const hinstance = win32.GetModuleHandleA(null);
 
-    // create random button first (left of combobox)
+    // create icon first (leftmost)
+    g_icon_ctrl = win32.CreateWindowExA(
+        0,
+        "STATIC",
+        "",
+        win32.WS_CHILD | win32.WS_VISIBLE | win32.SS_ICON,
+        BUTTON_PADDING,
+        BUTTON_PADDING,
+        ICON_SIZE,
+        ICON_SIZE,
+        hwnd,
+        null,
+        hinstance,
+        null,
+    );
+
+    // load small icon and set it
+    if (g_icon_ctrl) |ctrl| {
+        const small_icon = win32.LoadImageA(hinstance, win32.IDI_APP, win32.IMAGE_ICON, ICON_SIZE, ICON_SIZE, win32.LR_DEFAULTCOLOR);
+        if (small_icon) |ico| {
+            _ = win32.SendMessageA(ctrl, win32.STM_SETICON, @intFromPtr(ico), 0);
+        }
+    }
+
+    const random_x = BUTTON_PADDING + ICON_SIZE + BUTTON_PADDING;
+
+    // create random button (after icon)
     g_random_button = win32.CreateWindowExA(
         0,
         "BUTTON",
         "random",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_PUSHBUTTON,
-        BUTTON_PADDING,
+        random_x,
         BUTTON_PADDING,
         RANDOM_BUTTON_WIDTH,
-        BUTTON_HEIGHT,
+        TOOLBAR_CTRL_HEIGHT,
         hwnd,
         @ptrFromInt(ID_RANDOM),
         hinstance,
         null,
     );
 
-    const combobox_x = BUTTON_PADDING + RANDOM_BUTTON_WIDTH + BUTTON_PADDING;
+    const combobox_x = random_x + RANDOM_BUTTON_WIDTH + BUTTON_PADDING;
     g_combobox = win32.CreateWindowExA(
         0,
         "COMBOBOX",
@@ -707,6 +738,10 @@ fn scrollContent(hwnd: win32.HWND, delta: i32) void {
 const COLOR_NORMAL: u32 = 0x00F0F0F0; // light gray (default button)
 const COLOR_PRESSED: u32 = 0x00CFCFFF; // pale pink (RGB: 0xFFCFCF)
 const COLOR_TEXT: u32 = 0x00000000; // black
+// ABGR (Alpha, Blue, Green, Red) - bytes reversed from RGB
+// #RRGGBB → 0x00BBGGRR
+// #FFFCA5 → 0x00A5FCFF
+const COLOR_TOOLBAR: u32 = 0x00A5FCFF;
 
 fn drawButton(dis: *win32.DRAWITEMSTRUCT) void {
     const is_pressed = (dis.itemState & win32.ODS_SELECTED) != 0;

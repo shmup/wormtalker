@@ -100,6 +100,8 @@ pub const WS_VSCROLL: u32 = 0x00200000;
 pub const WS_CLIPCHILDREN: u32 = 0x02000000;
 pub const BS_PUSHBUTTON: u32 = 0x00000000;
 pub const SS_CENTER: u32 = 0x00000001;
+pub const SS_ICON: u32 = 0x00000003;
+pub const STM_SETICON: u32 = 0x0170;
 pub const CW_USEDEFAULT: i32 = @bitCast(@as(u32, 0x80000000));
 
 // window messages
@@ -107,6 +109,7 @@ pub const WM_DESTROY: u32 = 0x0002;
 pub const WM_SIZE: u32 = 0x0005;
 pub const WM_SETREDRAW: u32 = 0x000B;
 pub const WM_PAINT: u32 = 0x000F;
+pub const WM_ERASEBKGND: u32 = 0x0014;
 pub const WM_COMMAND: u32 = 0x0111;
 pub const WM_VSCROLL: u32 = 0x0115;
 pub const WM_MOUSEWHEEL: u32 = 0x020A;
@@ -151,21 +154,6 @@ pub const BST_CHECKED: u32 = 0x0001;
 // menu flags
 pub const MF_STRING: u32 = 0x00000000;
 pub const MF_POPUP: u32 = 0x00000010;
-
-// menu info
-pub const MIM_BACKGROUND: u32 = 0x00000002;
-
-pub const MENUINFO = extern struct {
-    cbSize: u32 = @sizeOf(MENUINFO),
-    fMask: u32 = 0,
-    dwStyle: u32 = 0,
-    cyMax: u32 = 0,
-    hbrBack: ?HBRUSH = null,
-    dwContextHelpID: u32 = 0,
-    dwMenuData: usize = 0,
-};
-
-pub extern "user32" fn SetMenuInfo(HMENU, *const MENUINFO) callconv(.c) BOOL;
 
 // static control color
 pub const WM_CTLCOLORSTATIC: u32 = 0x0138;
@@ -301,9 +289,14 @@ pub extern "user32" fn GetDlgCtrlID(HWND) callconv(.c) i32;
 pub extern "user32" fn SetCapture(HWND) callconv(.c) ?HWND;
 pub extern "user32" fn ReleaseCapture() callconv(.c) BOOL;
 pub extern "user32" fn LoadIconA(?HINSTANCE, usize) callconv(.c) ?HICON;
+pub extern "user32" fn LoadImageA(?HINSTANCE, usize, u32, i32, i32, u32) callconv(.c) ?*anyopaque;
 
 // icon resource id
 pub const IDI_APP: usize = 1;
+
+// LoadImage types and flags
+pub const IMAGE_ICON: u32 = 1;
+pub const LR_DEFAULTCOLOR: u32 = 0x00000000;
 
 // registry types and constants
 pub const HKEY = *opaque {};
