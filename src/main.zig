@@ -389,7 +389,7 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                     win32.PostQuitMessage(0);
                     return 0;
                 } else if (control_id == IDM_ABOUT) {
-                    _ = win32.MessageBoxA(hwnd, "wormtalker\n\nsoundboard for worms armageddon", "about wormtalker", win32.MB_OK | win32.MB_ICONINFORMATION);
+                    _ = win32.MessageBoxA(hwnd, "wormtalker\n\nsoundboard for worms armageddon\n\nhotkeys:\n  up/down - change bank\n  1-9, 0 - play sound 1-10\n  qwerty - play sound 11+", "about wormtalker", win32.MB_OK | win32.MB_ICONINFORMATION);
                     return 0;
                 }
             }
