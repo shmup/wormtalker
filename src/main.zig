@@ -8,7 +8,7 @@ const scanner = @import("scanner.zig");
 // layout constants
 const BUTTON_HEIGHT: i32 = 25;
 const BUTTON_PADDING: i32 = 2;
-const BUTTON_CHAR_WIDTH: i32 = 8;
+const BUTTON_CHAR_WIDTH: i32 = 7;
 const MIN_BUTTON_WIDTH: i32 = 40;
 const MIN_WINDOW_WIDTH: i32 = 800;
 const MIN_WINDOW_HEIGHT: i32 = 400;
@@ -664,7 +664,7 @@ fn layoutControls(hwnd: win32.HWND) void {
     }
 
     // calculate grid dimensions - use generous width so buttons fill space
-    const target_width = @max(max_btn_width, 80);
+    const target_width = @max(max_btn_width, 76);
     const cell_width = target_width + BUTTON_PADDING;
     const num_cols: usize = @intCast(@max(1, @divTrunc(available_width + BUTTON_PADDING, cell_width)));
     const btn_width = @divTrunc(available_width - @as(i32, @intCast(num_cols - 1)) * BUTTON_PADDING, @as(i32, @intCast(num_cols)));
