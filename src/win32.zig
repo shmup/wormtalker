@@ -259,6 +259,23 @@ pub const IDC_ARROW: usize = 32512;
 // extended window styles
 pub const WS_EX_APPWINDOW: u32 = 0x00040000;
 
+// non-client hit test
+pub const WM_NCHITTEST: u32 = 0x0084;
+pub const HTCAPTION: LRESULT = 2;
+
+// menu bar info
+pub const MENUBARINFO = extern struct {
+    cbSize: u32 = @sizeOf(MENUBARINFO),
+    rcBar: RECT = .{ .left = 0, .top = 0, .right = 0, .bottom = 0 },
+    hMenu: ?HMENU = null,
+    hwndMenu: ?HWND = null,
+    fBarFocused: u32 = 0,
+    fFocused: u32 = 0,
+};
+
+pub extern "user32" fn GetMenuBarInfo(hwnd: HWND, idObject: i32, idItem: i32, pmbi: *MENUBARINFO) callconv(.c) BOOL;
+pub const OBJID_MENU: i32 = -3;
+
 // win32 functions
 pub extern "user32" fn RegisterClassExA(*const WNDCLASSEXA) callconv(.c) u16;
 pub extern "user32" fn CreateWindowExA(

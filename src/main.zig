@@ -566,6 +566,22 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
             }
             return win32.DefWindowProcA(hwnd, msg, wParam, lParam);
         },
+        win32.WM_NCHITTEST => {
+            // make menu bar draggable (left portion only, not Help/X)
+            var mbi = win32.MENUBARINFO{};
+            if (win32.GetMenuBarInfo(hwnd, win32.OBJID_MENU, 0, &mbi) != 0) {
+                var pt: win32.POINT = undefined;
+                if (win32.GetCursorPos(&pt) != 0) {
+                    if (pt.y >= mbi.rcBar.top and pt.y < mbi.rcBar.bottom) {
+                        const menu_right_area = mbi.rcBar.right - 100;
+                        if (pt.x < menu_right_area) {
+                            return win32.HTCAPTION;
+                        }
+                    }
+                }
+            }
+            return win32.DefWindowProcA(hwnd, msg, wParam, lParam);
+        },
         win32.WM_DESTROY => {
             if (g_toolbar_brush) |brush| {
                 _ = win32.DeleteObject(@ptrCast(brush));
