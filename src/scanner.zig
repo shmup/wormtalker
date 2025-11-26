@@ -4,6 +4,116 @@
 const std = @import("std");
 const win32 = @import("win32.zig");
 
+// registry helpers
+
+fn registryGetString(key_path: [*:0]const u8, value_name: [*:0]const u8, buf: []u8) ?[]const u8 {
+    var key: win32.HKEY = undefined;
+    const status = win32.RegOpenKeyExA(
+        win32.HKEY_CURRENT_USER,
+        key_path,
+        0,
+        win32.KEY_READ,
+        &key,
+    );
+    if (status != win32.ERROR_SUCCESS) return null;
+    defer _ = win32.RegCloseKey(key);
+
+    var data_type: u32 = 0;
+    var data_size: u32 = @intCast(buf.len);
+    const query_status = win32.RegQueryValueExA(
+        key,
+        value_name,
+        null,
+        &data_type,
+        buf.ptr,
+        &data_size,
+    );
+    if (query_status != win32.ERROR_SUCCESS or data_type != win32.REG_SZ) return null;
+
+    const len = if (data_size > 0) data_size - 1 else 0;
+    return buf[0..len];
+}
+
+fn registrySetString(key_path: [*:0]const u8, value_name: [*:0]const u8, data: []const u8) void {
+    var key: win32.HKEY = undefined;
+    const status = win32.RegCreateKeyExA(
+        win32.HKEY_CURRENT_USER,
+        key_path,
+        0,
+        null,
+        0,
+        win32.KEY_WRITE,
+        null,
+        &key,
+        null,
+    );
+    if (status != win32.ERROR_SUCCESS) return;
+    defer _ = win32.RegCloseKey(key);
+
+    _ = win32.RegSetValueExA(
+        key,
+        value_name,
+        0,
+        win32.REG_SZ,
+        data.ptr,
+        @intCast(data.len + 1),
+    );
+}
+
+fn registryGetDword(key_path: [*:0]const u8, value_name: [*:0]const u8, default: u32) u32 {
+    var key: win32.HKEY = undefined;
+    const status = win32.RegOpenKeyExA(
+        win32.HKEY_CURRENT_USER,
+        key_path,
+        0,
+        win32.KEY_READ,
+        &key,
+    );
+    if (status != win32.ERROR_SUCCESS) return default;
+    defer _ = win32.RegCloseKey(key);
+
+    var value: u32 = default;
+    var data_type: u32 = 0;
+    var data_size: u32 = @sizeOf(u32);
+    const query_status = win32.RegQueryValueExA(
+        key,
+        value_name,
+        null,
+        &data_type,
+        @ptrCast(&value),
+        &data_size,
+    );
+    if (query_status != win32.ERROR_SUCCESS or data_type != win32.REG_DWORD) return default;
+
+    return value;
+}
+
+fn registrySetDword(key_path: [*:0]const u8, value_name: [*:0]const u8, value: u32) void {
+    var key: win32.HKEY = undefined;
+    const status = win32.RegCreateKeyExA(
+        win32.HKEY_CURRENT_USER,
+        key_path,
+        0,
+        null,
+        0,
+        win32.KEY_WRITE,
+        null,
+        &key,
+        null,
+    );
+    if (status != win32.ERROR_SUCCESS) return;
+    defer _ = win32.RegCloseKey(key);
+
+    _ = win32.RegSetValueExA(
+        key,
+        value_name,
+        0,
+        win32.REG_DWORD,
+        @ptrCast(&value),
+        @sizeOf(u32),
+    );
+}
+
 // generic comparator for types with a .name field
 fn compareByName(comptime T: type) fn (void, T, T) bool {
     return struct {
@@ -41,164 +151,31 @@ pub const ScanResult = struct {
 };
 
 const WORMTALKER_REG_KEY = "Software\\wormtalker";
+const WORMS_REG_KEY = "Software\\Team17SoftwareLTD\\WormsArmageddon";
 
 // save auto-preview setting to registry
 pub fn saveAutoPreview(enabled: bool) void {
-    var key: win32.HKEY = undefined;
-    const status = win32.RegCreateKeyExA(
-        win32.HKEY_CURRENT_USER,
-        WORMTALKER_REG_KEY,
-        0,
-        null,
-        0,
-        win32.KEY_WRITE,
-        null,
-        &key,
-        null,
-    );
-
-    if (status != win32.ERROR_SUCCESS) return;
-    defer _ = win32.RegCloseKey(key);
-
-    const value: u32 = if (enabled) 1 else 0;
-    _ = win32.RegSetValueExA(
-        key,
-        "AutoPreview",
-        0,
-        win32.REG_DWORD,
-        @ptrCast(&value),
-        @sizeOf(u32),
-    );
+    registrySetDword(WORMTALKER_REG_KEY, "AutoPreview", if (enabled) 1 else 0);
 }
 
 // get auto-preview setting from registry (defaults to true if not set)
 pub fn getAutoPreview() bool {
-    var key: win32.HKEY = undefined;
-    const status = win32.RegOpenKeyExA(
-        win32.HKEY_CURRENT_USER,
-        WORMTALKER_REG_KEY,
-        0,
-        win32.KEY_READ,
-        &key,
-    );
-
-    if (status != win32.ERROR_SUCCESS) return true;
-    defer _ = win32.RegCloseKey(key);
-
-    var value: u32 = 1;
-    var data_type: u32 = 0;
-    var data_size: u32 = @sizeOf(u32);
-
-    const query_status = win32.RegQueryValueExA(
-        key,
-        "AutoPreview",
-        null,
-        &data_type,
-        @ptrCast(&value),
-        &data_size,
-    );
-
-    if (query_status != win32.ERROR_SUCCESS or data_type != win32.REG_DWORD) return true;
-
-    return value != 0;
+    return registryGetDword(WORMTALKER_REG_KEY, "AutoPreview", 1) != 0;
 }
 
 // save browsed path to registry
 pub fn saveBrowsedPath(path: []const u8) void {
-    var key: win32.HKEY = undefined;
-    const status = win32.RegCreateKeyExA(
-        win32.HKEY_CURRENT_USER,
-        WORMTALKER_REG_KEY,
-        0,
-        null,
-        0,
-        win32.KEY_WRITE,
-        null,
-        &key,
-        null,
-    );
-
-    if (status != win32.ERROR_SUCCESS) return;
-    defer _ = win32.RegCloseKey(key);
-
-    // include null terminator in size
-    _ = win32.RegSetValueExA(
-        key,
-        "Path",
-        0,
-        win32.REG_SZ,
-        path.ptr,
-        @intCast(path.len + 1),
-    );
+    registrySetString(WORMTALKER_REG_KEY, "Path", path);
 }
 
 // try to read saved path from our registry key
 pub fn getSavedPath(buf: []u8) ?[]const u8 {
-    var key: win32.HKEY = undefined;
-    const status = win32.RegOpenKeyExA(
-        win32.HKEY_CURRENT_USER,
-        WORMTALKER_REG_KEY,
-        0,
-        win32.KEY_READ,
-        &key,
-    );
-
-    if (status != win32.ERROR_SUCCESS) return null;
-    defer _ = win32.RegCloseKey(key);
-
-    var data_type: u32 = 0;
-    var data_size: u32 = @intCast(buf.len);
-
-    const query_status = win32.RegQueryValueExA(
-        key,
-        "Path",
-        null,
-        &data_type,
-        buf.ptr,
-        &data_size,
-    );
-
-    if (query_status != win32.ERROR_SUCCESS or data_type != win32.REG_SZ) return null;
-
-    const len = if (data_size > 0) data_size - 1 else 0;
-    return buf[0..len];
+    return registryGetString(WORMTALKER_REG_KEY, "Path", buf);
 }
 
 // try to read worms installation path from registry
 pub fn getWormsPath(buf: []u8) ?[]const u8 {
-    var key: win32.HKEY = undefined;
-    const status = win32.RegOpenKeyExA(
-        win32.HKEY_CURRENT_USER,
-        "Software\\Team17SoftwareLTD\\WormsArmageddon",
-        0,
-        win32.KEY_READ,
-        &key,
-    );
-
-    if (status != win32.ERROR_SUCCESS) {
-        return null;
-    }
-    defer _ = win32.RegCloseKey(key);
-
-    var data_type: u32 = 0;
-    var data_size: u32 = @intCast(buf.len);
-
-    const query_status = win32.RegQueryValueExA(
-        key,
-        "PATH",
-        null,
-        &data_type,
-        buf.ptr,
-        &data_size,
-    );
-
-    if (query_status != win32.ERROR_SUCCESS or data_type != win32.REG_SZ) {
-        return null;
-    }
-
-    // data_size includes null terminator
-    const len = if (data_size > 0) data_size - 1 else 0;
-    return buf[0..len];
+    return registryGetString(WORMS_REG_KEY, "PATH", buf);
 }
 
 // check if path looks like worms root (has DATA directory)
