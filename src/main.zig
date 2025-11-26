@@ -37,9 +37,11 @@ const ID_RANDOM: usize = 3003;
 // timer IDs
 const TIMER_BUTTON_RELEASE: usize = 4001;
 const TIMER_NAV_REPEAT: usize = 4002;
+const TIMER_AUTO_PREVIEW: usize = 4003;
 const FLASH_DURATION_MS: u32 = 100;
 const NAV_INITIAL_DELAY_MS: u32 = 300; // delay before repeat starts
 const NAV_REPEAT_MS: u32 = 50; // fast repeat rate after initial delay
+const AUTO_PREVIEW_DELAY_MS: u32 = 150; // debounce delay for auto-preview after nav
 
 // navigation
 const BANKS_PER_PAGE: i32 = 13;
@@ -159,9 +161,9 @@ fn applyBankChange(hwnd: win32.HWND, target: usize) void {
     _ = win32.SendMessageA(hwnd, win32.WM_SETREDRAW, 1, 0);
     _ = win32.RedrawWindow(hwnd, null, null, win32.RDW_ERASE | win32.RDW_INVALIDATE | win32.RDW_ALLCHILDREN);
 
-    // play random sound from new bank (if auto-preview enabled)
+    // debounce auto-preview: only play after user stops navigating
     if (isAutoPreviewEnabled()) {
-        playRandomSound();
+        _ = win32.SetTimer(hwnd, TIMER_AUTO_PREVIEW, AUTO_PREVIEW_DELAY_MS, null);
     }
 }
 
@@ -423,6 +425,8 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                 g_nav_repeat_started = false;
                 _ = win32.KillTimer(hwnd, TIMER_NAV_REPEAT);
             }
+            // cancel pending auto-preview
+            _ = win32.KillTimer(hwnd, TIMER_AUTO_PREVIEW);
             // also release pending button from dropdown
             if (g_pending_button) |btn_index| {
                 _ = win32.ReleaseCapture();
@@ -459,6 +463,12 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                     }
                 } else {
                     _ = win32.KillTimer(hwnd, TIMER_NAV_REPEAT);
+                }
+            } else if (wParam == TIMER_AUTO_PREVIEW) {
+                // debounced auto-preview: play sound now that user stopped navigating
+                _ = win32.KillTimer(hwnd, TIMER_AUTO_PREVIEW);
+                if (isAutoPreviewEnabled()) {
+                    playRandomSound();
                 }
             }
             return 0;
@@ -646,6 +656,8 @@ fn createButtonsForBank(hwnd: win32.HWND, bank_index: usize) void {
         _ = win32.KillTimer(hwnd, TIMER_BUTTON_RELEASE);
         g_flash_button = null;
     }
+    // kill any pending auto-preview timer (will be restarted if needed)
+    _ = win32.KillTimer(hwnd, TIMER_AUTO_PREVIEW);
 
     // destroy existing buttons
     for (g_buttons[0..g_num_buttons]) |maybe_btn| {
