@@ -448,7 +448,7 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
         win32.WM_MOUSEWHEEL => {
             const hi_word: u16 = @truncate(@as(u64, @bitCast(wParam)) >> 16);
             const delta: i16 = @bitCast(hi_word);
-            const scroll_amount: i32 = if (delta > 0) -30 else 30;
+            const scroll_amount: i32 = if (delta > 0) -ui.SCROLL_WHEEL_AMOUNT else ui.SCROLL_WHEEL_AMOUNT;
             if (ui.scrollContent(hwnd, scroll_amount, &g.scroll_pos)) {
                 layoutControls(hwnd);
             }
@@ -538,7 +538,7 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
         win32.WM_MEASUREITEM => {
             const mis: *win32.MEASUREITEMSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
             if (mis.CtlType == win32.ODT_MENU) {
-                mis.itemWidth = 160;
+                mis.itemWidth = ui.MENU_ITEM_WIDTH;
                 mis.itemHeight = @intCast(win32.GetSystemMetrics(win32.SM_CYMENU));
                 return 1;
             }
@@ -575,7 +575,7 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
                 var pt: win32.POINT = undefined;
                 if (win32.GetCursorPos(&pt) != 0) {
                     if (pt.y >= mbi.rcBar.top and pt.y < mbi.rcBar.bottom) {
-                        const menu_right_area = mbi.rcBar.right - 100;
+                        const menu_right_area = mbi.rcBar.right - ui.MENU_RIGHT_MARGIN;
                         if (pt.x < menu_right_area) {
                             return win32.HTCAPTION;
                         }
@@ -605,8 +605,31 @@ fn parseArgs() bool {
     if (cmd_line == null) return false;
 
     const cmd = std.mem.span(cmd_line.?);
-    return std.mem.indexOf(u8, cmd, " -b") != null or
-        std.mem.indexOf(u8, cmd, " --browse") != null;
+
+    // skip program name (may be quoted)
+    var rest = cmd;
+    if (rest.len > 0 and rest[0] == '"') {
+        // quoted program name - find closing quote
+        if (std.mem.indexOfScalar(u8, rest[1..], '"')) |end| {
+            rest = rest[end + 2 ..];
+        }
+    } else {
+        // unquoted - skip to first space
+        if (std.mem.indexOfScalar(u8, rest, ' ')) |end| {
+            rest = rest[end..];
+        } else {
+            return false; // no args
+        }
+    }
+
+    // check each space-separated token
+    var iter = std.mem.tokenizeScalar(u8, rest, ' ');
+    while (iter.next()) |arg| {
+        if (std.mem.eql(u8, arg, "-b") or std.mem.eql(u8, arg, "--browse")) {
+            return true;
+        }
+    }
+    return false;
 }
 
 fn initRuntime(force_browse: bool) void {

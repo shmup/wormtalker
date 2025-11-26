@@ -17,6 +17,12 @@ pub const COMBOBOX_HEIGHT: i32 = 250;
 pub const RANDOM_BUTTON_WIDTH: i32 = 55;
 pub const ICON_SIZE: i32 = 22;
 pub const MAX_BUTTONS: usize = 128;
+pub const CHECKBOX_WIDTH: i32 = 110;
+pub const CHECKBOX_HEIGHT: i32 = 20;
+pub const SCROLL_LINE_AMOUNT: i32 = 20;
+pub const SCROLL_WHEEL_AMOUNT: i32 = 30;
+pub const MENU_ITEM_WIDTH: u32 = 160;
+pub const MENU_RIGHT_MARGIN: i32 = 100;
 
 // control IDs
 pub const ID_COMBOBOX: usize = 1000;
@@ -142,8 +148,8 @@ pub fn createToolbar(
         win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_AUTOCHECKBOX,
         combobox_x + COMBOBOX_WIDTH + TOOLBAR_ITEM_SPACING,
         TOOLBAR_PADDING + 3,
-        110,
-        20,
+        CHECKBOX_WIDTH,
+        CHECKBOX_HEIGHT,
         hwnd,
         @ptrFromInt(ID_AUTO_PREVIEW),
         hinstance,
@@ -293,8 +299,8 @@ pub fn handleScroll(hwnd: win32.HWND, wParam: win32.WPARAM, scroll_pos: *i32) bo
     var new_pos = si.nPos;
 
     switch (action) {
-        win32.SB_LINEUP => new_pos -= 20,
-        win32.SB_LINEDOWN => new_pos += 20,
+        win32.SB_LINEUP => new_pos -= SCROLL_LINE_AMOUNT,
+        win32.SB_LINEDOWN => new_pos += SCROLL_LINE_AMOUNT,
         win32.SB_PAGEUP => new_pos -= @as(i32, @intCast(si.nPage)),
         win32.SB_PAGEDOWN => new_pos += @as(i32, @intCast(si.nPage)),
         win32.SB_THUMBTRACK => new_pos = si.nTrackPos,
