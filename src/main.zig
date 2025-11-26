@@ -10,14 +10,14 @@ const BUTTON_HEIGHT: i32 = 25;
 const BUTTON_PADDING: i32 = 2;
 const BUTTON_CHAR_WIDTH: i32 = 7;
 const MIN_BUTTON_WIDTH: i32 = 40;
-const MIN_WINDOW_WIDTH: i32 = 800;
-const MIN_WINDOW_HEIGHT: i32 = 400;
-const TOOLBAR_HEIGHT: i32 = 30;
-const COMBOBOX_WIDTH: i32 = 150;
+const MIN_WINDOW_WIDTH: i32 = 600;
+const MIN_WINDOW_HEIGHT: i32 = 450;
+const TOOLBAR_PADDING: i32 = 8; // vertical padding above/below toolbar controls
+const TOOLBAR_CTRL_HEIGHT: i32 = 23; // match combobox edit height
+const TOOLBAR_HEIGHT: i32 = TOOLBAR_CTRL_HEIGHT + 2 * TOOLBAR_PADDING;
+const COMBOBOX_WIDTH: i32 = 160;
 const COMBOBOX_HEIGHT: i32 = 250;
 const RANDOM_BUTTON_WIDTH: i32 = 55;
-const TOOLBAR_CTRL_HEIGHT: i32 = 23; // match combobox edit height
-const TOOLBAR_Y_OFFSET: i32 = 5; // top padding for toolbar controls
 const ICON_SIZE: i32 = 22; // fill toolbar height
 const MAX_BUTTONS: usize = 128;
 
@@ -520,7 +520,7 @@ fn createCombobox(hwnd: win32.HWND) void {
         "",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.SS_ICON,
         BUTTON_PADDING,
-        TOOLBAR_Y_OFFSET,
+        TOOLBAR_PADDING,
         ICON_SIZE,
         ICON_SIZE,
         hwnd,
@@ -546,7 +546,7 @@ fn createCombobox(hwnd: win32.HWND) void {
         "random",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_OWNERDRAW,
         random_x,
-        TOOLBAR_Y_OFFSET,
+        TOOLBAR_PADDING,
         RANDOM_BUTTON_WIDTH,
         TOOLBAR_CTRL_HEIGHT,
         hwnd,
@@ -562,7 +562,7 @@ fn createCombobox(hwnd: win32.HWND) void {
         "",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.CBS_DROPDOWNLIST | win32.CBS_HASSTRINGS,
         combobox_x,
-        TOOLBAR_Y_OFFSET,
+        TOOLBAR_PADDING,
         COMBOBOX_WIDTH,
         COMBOBOX_HEIGHT,
         hwnd,
@@ -587,7 +587,7 @@ fn createCombobox(hwnd: win32.HWND) void {
         "auto-preview",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_AUTOCHECKBOX,
         combobox_x + COMBOBOX_WIDTH + BUTTON_PADDING,
-        TOOLBAR_Y_OFFSET + 3, // slight vertical offset to align with combobox text
+        TOOLBAR_PADDING + 3, // slight vertical offset to align with combobox text
         100,
         20,
         hwnd,
@@ -676,7 +676,7 @@ fn layoutControls(hwnd: win32.HWND) void {
         const row: i32 = @intCast(@divTrunc(i, num_cols));
 
         const x = BUTTON_PADDING + col * (btn_width + BUTTON_PADDING);
-        const y = TOOLBAR_HEIGHT + BUTTON_PADDING + row * row_height - g_scroll_pos;
+        const y = TOOLBAR_HEIGHT + row * row_height - g_scroll_pos;
 
         if (g_buttons[i]) |btn| {
             _ = win32.MoveWindow(btn, x, y, btn_width, BUTTON_HEIGHT, 1);
@@ -751,7 +751,7 @@ const COLOR_TEXT: u32 = 0x00000000; // black
 // ABGR (Alpha, Blue, Green, Red) - bytes reversed from RGB
 // #RRGGBB → 0x00BBGGRR
 // #FFFCA5 → 0x00A5FCFF
-const COLOR_TOOLBAR: u32 = 0x00A5FCFF;
+const COLOR_TOOLBAR: u32 = COLOR_NORMAL;
 
 fn drawButton(dis: *win32.DRAWITEMSTRUCT) void {
     const is_pressed = (dis.itemState & win32.ODS_SELECTED) != 0;
