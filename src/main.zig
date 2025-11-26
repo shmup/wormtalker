@@ -858,6 +858,11 @@ fn playRandomSound() void {
 
     const random_index: u16 = @intCast(g_prng.random().uintLessThan(usize, wav_count));
 
+    // unpress any existing flash button before setting new one
+    if (g_flash_button) |btn_index| {
+        setButtonState(btn_index, false);
+    }
+
     // show button pressed briefly
     setButtonState(random_index, true);
     _ = win32.SetTimer(g_main_hwnd, TIMER_BUTTON_RELEASE, FLASH_DURATION_MS, null);
