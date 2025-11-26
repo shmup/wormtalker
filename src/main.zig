@@ -13,6 +13,7 @@ const MIN_WINDOW_HEIGHT: i32 = 300;
 const TOOLBAR_HEIGHT: i32 = 30;
 const COMBOBOX_WIDTH: i32 = 150;
 const COMBOBOX_HEIGHT: i32 = 250;
+const RANDOM_BUTTON_WIDTH: i32 = 55;
 const MAX_BUTTONS: usize = 128;
 
 // control IDs
@@ -25,6 +26,7 @@ const IDM_EXIT: usize = 2002;
 // browse button ID
 const ID_BROWSE: usize = 3001;
 const ID_AUTO_PREVIEW: usize = 3002;
+const ID_RANDOM: usize = 3003;
 
 // timer IDs
 const TIMER_BUTTON_RELEASE: usize = 4001;
@@ -158,6 +160,7 @@ var g_buttons: [MAX_BUTTONS]?win32.HWND = [_]?win32.HWND{null} ** MAX_BUTTONS;
 var g_num_buttons: usize = 0;
 var g_combobox: ?win32.HWND = null;
 var g_auto_preview_checkbox: ?win32.HWND = null;
+var g_random_button: ?win32.HWND = null;
 var g_current_bank: usize = 0;
 var g_scroll_pos: i32 = 0;
 var g_content_height: i32 = 0;
@@ -310,6 +313,9 @@ fn wndProc(hwnd: win32.HWND, msg: u32, wParam: win32.WPARAM, lParam: win32.LPARA
             if (control_id == ID_BROWSE and notification == win32.BN_CLICKED) {
                 handleBrowseClick(hwnd);
                 return 0;
+            } else if (control_id == ID_RANDOM and notification == win32.BN_CLICKED) {
+                handleRandomClick(hwnd);
+                return 0;
             } else if (control_id == ID_AUTO_PREVIEW and notification == win32.BN_CLICKED) {
                 // return focus to main window so keyboard shortcuts work
                 _ = win32.SetFocus(hwnd);
@@ -448,12 +454,30 @@ fn createMenuBar(hwnd: win32.HWND) void {
 
 fn createCombobox(hwnd: win32.HWND) void {
     const hinstance = win32.GetModuleHandleA(null);
+
+    // create random button first (left of combobox)
+    g_random_button = win32.CreateWindowExA(
+        0,
+        "BUTTON",
+        "random",
+        win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_PUSHBUTTON,
+        BUTTON_PADDING,
+        BUTTON_PADDING,
+        RANDOM_BUTTON_WIDTH,
+        BUTTON_HEIGHT,
+        hwnd,
+        @ptrFromInt(ID_RANDOM),
+        hinstance,
+        null,
+    );
+
+    const combobox_x = BUTTON_PADDING + RANDOM_BUTTON_WIDTH + BUTTON_PADDING;
     g_combobox = win32.CreateWindowExA(
         0,
         "COMBOBOX",
         "",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.CBS_DROPDOWNLIST | win32.CBS_HASSTRINGS,
-        BUTTON_PADDING,
+        combobox_x,
         BUTTON_PADDING,
         COMBOBOX_WIDTH,
         COMBOBOX_HEIGHT,
@@ -478,7 +502,7 @@ fn createCombobox(hwnd: win32.HWND) void {
         "BUTTON",
         "auto-preview",
         win32.WS_CHILD | win32.WS_VISIBLE | win32.BS_AUTOCHECKBOX,
-        BUTTON_PADDING + COMBOBOX_WIDTH + BUTTON_PADDING,
+        combobox_x + COMBOBOX_WIDTH + BUTTON_PADDING,
         BUTTON_PADDING + 3, // slight vertical offset to align with combobox text
         100,
         20,
@@ -718,6 +742,25 @@ fn handleBankChangeInternal(hwnd: win32.HWND, play_random: bool) void {
             }
         }
     }
+}
+
+fn handleRandomClick(hwnd: win32.HWND) void {
+    const num_banks = getBankCount();
+    if (num_banks == 0) return;
+
+    // pick a random bank
+    const random_bank: usize = g_prng.random().uintLessThan(usize, num_banks);
+
+    // update combobox selection
+    if (g_combobox) |combo| {
+        _ = win32.SendMessageA(combo, win32.CB_SETCURSEL, @intCast(random_bank), 0);
+    }
+
+    // apply the bank change (with auto-preview sound)
+    applyBankChange(hwnd, random_bank);
+
+    // restore focus so hotkeys work
+    _ = win32.SetFocus(hwnd);
 }
 
 // browse UI functions (shown when worms installation not found)
