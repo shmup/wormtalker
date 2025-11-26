@@ -652,7 +652,8 @@ fn createButtonsForBank(hwnd: win32.HWND, bank_index: usize) void {
     const hinstance = win32.GetModuleHandleA(null);
 
     // clear flash state before destroying buttons (index becomes invalid)
-    if (g_flash_button != null) {
+    if (g_flash_button) |btn_index| {
+        setButtonState(btn_index, false); // unpress before destroying
         _ = win32.KillTimer(hwnd, TIMER_BUTTON_RELEASE);
         g_flash_button = null;
     }
