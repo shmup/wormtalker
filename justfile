@@ -26,6 +26,14 @@ release-embed:
 release-embed-compressed:
     zig build -Doptimize=ReleaseSafe -Dembed=true -Dcompress=true
 
+# build full explorer mode (all wav directories)
+build-full:
+    zig build -Dfull=true
+
+# build release full explorer mode
+release-full:
+    zig build -Doptimize=ReleaseSafe -Dfull=true
+
 # build release small (smallest binary)
 release-small:
     zig build -Doptimize=ReleaseSmall
@@ -50,6 +58,10 @@ run-browse: build
 run-embed: build-embed
     {{ exe }}
 
+# run full explorer mode
+run-full: build-full
+    {{ exe }}
+
 # docker builds - output goes to ./dist/
 docker-build:
     MYUID=$(id -u) MYGID=$(id -g) docker compose run --rm build
@@ -68,3 +80,9 @@ docker-small-embed:
 
 docker-small-embed-compressed:
     MYUID=$(id -u) MYGID=$(id -g) OPTIMIZE=ReleaseSmall EMBED=true COMPRESS=true docker compose run --rm build
+
+deploy:
+  @just release-small
+  cp zig-out/bin/wormtalker.exe /var/www/html/worms/tools
+  @just release-small-embed-compressed
+  cp zig-out/bin/wormtalker.exe /var/www/html/worms/tools/wormtalker-bundled.exe

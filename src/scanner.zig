@@ -300,6 +300,132 @@ pub fn scanSpeechDirectory(allocator: std.mem.Allocator, base_path: []const u8) 
     };
 }
 
+// scan entire worms directory for any folder containing wavs
+pub fn scanFullDirectory(allocator: std.mem.Allocator, base_path: []const u8) !ScanResult {
+    var banks: std.ArrayListUnmanaged(RuntimeBank) = .empty;
+    errdefer {
+        for (banks.items) |bank| {
+            for (bank.wavs) |wav| {
+                allocator.free(wav.name);
+                allocator.free(wav.path);
+            }
+            allocator.free(bank.wavs);
+            allocator.free(bank.name);
+        }
+        banks.deinit(allocator);
+    }
+
+    // directories to scan (relative to base_path)
+    const scan_dirs = [_]struct { path: []const u8, prefix: []const u8 }{
+        .{ .path = "DATA\\Streams", .prefix = "" },
+        .{ .path = "DATA\\User\\Fanfare", .prefix = "" },
+        .{ .path = "DATA\\Wav\\Effects", .prefix = "" },
+        .{ .path = "FESfx", .prefix = "" },
+        .{ .path = "DATA\\User\\Speech", .prefix = "Speech/" },
+        .{ .path = "User\\Speech", .prefix = "Speech/" },
+    };
+
+    for (scan_dirs) |scan_dir| {
+        var path_buf: [win32.MAX_PATH]u8 = undefined;
+        const dir_path = std.fmt.bufPrint(&path_buf, "{s}\\{s}", .{ base_path, scan_dir.path }) catch continue;
+
+        // check if this is a leaf directory (contains wavs directly)
+        if (scanDir(allocator, dir_path, scan_dir.prefix, &banks)) |_| {
+            // scanned successfully
+        } else |_| {
+            // try scanning subdirectories (for Speech folder)
+            var dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch continue;
+            defer dir.close();
+
+            var dir_iter = dir.iterate();
+            while (dir_iter.next() catch null) |entry| {
+                if (entry.kind == .directory) {
+                    var subdir_buf: [win32.MAX_PATH]u8 = undefined;
+                    const subdir_path = std.fmt.bufPrint(&subdir_buf, "{s}\\{s}", .{ dir_path, entry.name }) catch continue;
+                    scanDir(allocator, subdir_path, scan_dir.prefix, &banks) catch continue;
+                }
+            }
+        }
+    }
+
+    // sort banks by name
+    std.mem.sort(RuntimeBank, banks.items, {}, compareByName(RuntimeBank));
+
+    if (banks.items.len == 0) return error.NoBanksFound;
+
+    return .{
+        .banks = try banks.toOwnedSlice(allocator),
+        .allocator = allocator,
+    };
+}
+
+// scan a single directory for wav files, add as bank if any found
+fn scanDir(allocator: std.mem.Allocator, dir_path: []const u8, prefix: []const u8, banks: *std.ArrayListUnmanaged(RuntimeBank)) !void {
+    var dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch return error.DirNotFound;
+    defer dir.close();
+
+    var wavs: std.ArrayListUnmanaged(RuntimeWav) = .empty;
+    errdefer {
+        for (wavs.items) |wav| {
+            allocator.free(wav.name);
+            allocator.free(wav.path);
+        }
+        wavs.deinit(allocator);
+    }
+
+    var wav_iter = dir.iterate();
+    while (try wav_iter.next()) |entry| {
+        if (entry.kind == .file) {
+            const name = entry.name;
+            if (std.mem.endsWith(u8, name, ".WAV") or std.mem.endsWith(u8, name, ".wav")) {
+                // create display name (lowercase, no extension)
+                const base_name = name[0 .. name.len - 4];
+                var display_buf: [128]u8 = undefined;
+                const display_len = @min(base_name.len, display_buf.len - 1);
+                for (base_name[0..display_len], 0..) |c, i| {
+                    display_buf[i] = std.ascii.toLower(c);
+                }
+                const display_name = try allocator.dupeZ(u8, display_buf[0..display_len]);
+                errdefer allocator.free(display_name);
+
+                // create full path
+                var full_path_buf: [win32.MAX_PATH]u8 = undefined;
+                const full_path = std.fmt.bufPrint(&full_path_buf, "{s}\\{s}", .{ dir_path, name }) catch continue;
+                const full_path_z = try allocator.dupeZ(u8, full_path);
+                errdefer allocator.free(full_path_z);
+
+                try wavs.append(allocator, .{
+                    .name = display_name,
+                    .path = full_path_z,
+                });
+            }
+        }
+    }
+
+    if (wavs.items.len == 0) return error.NoWavsFound;
+
+    // sort wavs by name
+    std.mem.sort(RuntimeWav, wavs.items, {}, compareByName(RuntimeWav));
+
+    // extract directory name for bank name
+    const dir_name = std.fs.path.basename(dir_path);
+
+    // build bank name with prefix
+    var bank_name_buf: [256]u8 = undefined;
+    const bank_name = if (prefix.len > 0)
+        std.fmt.bufPrint(&bank_name_buf, "{s}{s}", .{ prefix, dir_name }) catch dir_name
+    else
+        dir_name;
+
+    const bank_name_z = try allocator.dupeZ(u8, bank_name);
+    errdefer allocator.free(bank_name_z);
+
+    try banks.append(allocator, .{
+        .name = bank_name_z,
+        .wavs = try wavs.toOwnedSlice(allocator),
+    });
+}
+
 // show folder browser dialog
 pub fn browseForFolder(hwnd: ?win32.HWND, buf: []u8) ?[]const u8 {
     const hr = win32.CoInitialize(null);

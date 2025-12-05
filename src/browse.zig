@@ -1,5 +1,6 @@
 const win32 = @import("win32.zig");
 const scanner = @import("scanner.zig");
+const sound_banks = @import("sound_banks.g.zig");
 
 // control IDs
 pub const ID_BROWSE: usize = 3001;
@@ -92,7 +93,12 @@ pub fn handleBrowse(hwnd: win32.HWND, allocator: std.mem.Allocator) BrowseResult
         const worms_root = scanner.findWormsRoot(path, &root_buf) orelse path;
 
         // try to scan the selected/found directory
-        if (scanner.scanSpeechDirectory(allocator, worms_root)) |result| {
+        const scan_result = if (sound_banks.full_mode)
+            scanner.scanFullDirectory(allocator, worms_root)
+        else
+            scanner.scanSpeechDirectory(allocator, worms_root);
+
+        if (scan_result) |result| {
             // save for next time
             scanner.saveBrowsedPath(worms_root);
             return .{ .success = result };

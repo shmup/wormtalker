@@ -644,6 +644,14 @@ fn parseArgs() bool {
     return false;
 }
 
+fn scanPath(path: []const u8) ?scanner.ScanResult {
+    if (sound_banks.full_mode) {
+        return scanner.scanFullDirectory(g.allocator, path) catch null;
+    } else {
+        return scanner.scanSpeechDirectory(g.allocator, path) catch null;
+    }
+}
+
 fn initRuntime(force_browse: bool) void {
     if (!sound_banks.runtime_mode) return;
 
@@ -655,19 +663,19 @@ fn initRuntime(force_browse: bool) void {
     var path_buf: [win32.MAX_PATH]u8 = undefined;
 
     if (scanner.getSavedPath(&path_buf)) |path| {
-        if (scanner.scanSpeechDirectory(g.allocator, path)) |result| {
+        if (scanPath(path)) |result| {
             g.runtime_banks = result;
             g.ui_state = .normal;
             return;
-        } else |_| {}
+        }
     }
 
     if (scanner.getWormsPath(&path_buf)) |path| {
-        if (scanner.scanSpeechDirectory(g.allocator, path)) |result| {
+        if (scanPath(path)) |result| {
             g.runtime_banks = result;
             g.ui_state = .normal;
             return;
-        } else |_| {}
+        }
     }
 
     g.ui_state = .browse_needed;
