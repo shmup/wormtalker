@@ -424,3 +424,22 @@ pub extern "shell32" fn SHBrowseForFolderA(*BROWSEINFOA) callconv(.c) LPITEMIDLI
 pub extern "shell32" fn SHGetPathFromIDListA(LPITEMIDLIST, [*]u8) callconv(.c) BOOL;
 pub extern "ole32" fn CoTaskMemFree(?*anyopaque) callconv(.c) void;
 pub extern "ole32" fn CoInitialize(?*anyopaque) callconv(.c) i32;
+
+// deferred window positioning (for smooth scrolling)
+pub const HDWP = *opaque {};
+
+pub const SWP_NOZORDER: u32 = 0x0004;
+pub const SWP_NOACTIVATE: u32 = 0x0010;
+
+pub extern "user32" fn BeginDeferWindowPos(nNumWindows: i32) callconv(.c) ?HDWP;
+pub extern "user32" fn DeferWindowPos(
+    hWinPosInfo: HDWP,
+    hWnd: HWND,
+    hWndInsertAfter: ?HWND,
+    x: i32,
+    y: i32,
+    cx: i32,
+    cy: i32,
+    uFlags: u32,
+) callconv(.c) ?HDWP;
+pub extern "user32" fn EndDeferWindowPos(hWinPosInfo: HDWP) callconv(.c) BOOL;

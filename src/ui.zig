@@ -271,16 +271,46 @@ pub fn layoutButtons(
         cache.content_height = calc_content_height;
     }
 
-    // layout buttons using cached grid values
-    for (0..num_buttons) |i| {
-        const col: i32 = @intCast(@mod(i, cache.num_cols));
-        const row: i32 = @intCast(@divTrunc(i, cache.num_cols));
+    // layout buttons using cached grid values with deferred positioning
+    // this batches all moves into a single atomic operation for smooth scrolling
+    const hdwp = win32.BeginDeferWindowPos(@intCast(num_buttons));
+    if (hdwp) |h| {
+        var current_hdwp = h;
+        for (0..num_buttons) |i| {
+            const col: i32 = @intCast(@mod(i, cache.num_cols));
+            const row: i32 = @intCast(@divTrunc(i, cache.num_cols));
 
-        const x = BUTTON_PADDING + col * (cache.btn_width + BUTTON_PADDING);
-        const y = TOOLBAR_HEIGHT + row * row_height - scroll_pos.*;
+            const x = BUTTON_PADDING + col * (cache.btn_width + BUTTON_PADDING);
+            const y = TOOLBAR_HEIGHT + row * row_height - scroll_pos.*;
 
-        if (buttons[i]) |btn| {
-            _ = win32.MoveWindow(btn, x, y, cache.btn_width, BUTTON_HEIGHT, 1);
+            if (buttons[i]) |btn| {
+                if (win32.DeferWindowPos(
+                    current_hdwp,
+                    btn,
+                    null,
+                    x,
+                    y,
+                    cache.btn_width,
+                    BUTTON_HEIGHT,
+                    win32.SWP_NOZORDER | win32.SWP_NOACTIVATE,
+                )) |new_hdwp| {
+                    current_hdwp = new_hdwp;
+                }
+            }
+        }
+        _ = win32.EndDeferWindowPos(current_hdwp);
+    } else {
+        // fallback to individual moves if BeginDeferWindowPos fails
+        for (0..num_buttons) |i| {
+            const col: i32 = @intCast(@mod(i, cache.num_cols));
+            const row: i32 = @intCast(@divTrunc(i, cache.num_cols));
+
+            const x = BUTTON_PADDING + col * (cache.btn_width + BUTTON_PADDING);
+            const y = TOOLBAR_HEIGHT + row * row_height - scroll_pos.*;
+
+            if (buttons[i]) |btn| {
+                _ = win32.MoveWindow(btn, x, y, cache.btn_width, BUTTON_HEIGHT, 1);
+            }
         }
     }
 
